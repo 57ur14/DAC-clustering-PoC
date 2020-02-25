@@ -62,7 +62,6 @@ packer_sections = {
     '.taz': 'pespin',
     '.tsuarch': 'tsuloader',
     '.tsustub': 'tsuloader',
-    '.packed': 'unknown packer',
     'PEPACK!!': 'pepack',
     '.Upack': 'upack',
     '.ByDwing': 'upack',

@@ -128,16 +128,16 @@ def rename_to_sha256(filepath):
     """
     Rename a file specified by a path to the sha256sum of the files and return the new path
     """
-    filehandle = open(filepath, 'rb')
-    rawfile = filehandle.read()
-    filehandle.close()
-    directory = os.path.dirname(filepath)
-    newpath = directory + '/' + hashlib.sha256(rawfile).hexdigest()
-    if filepath != newpath:
-        shutil.move(filepath, newpath) # Rename file to the sha256sum 
-    # Should not matter if "move" overwrites a previously unpacked file 
-    # since they would have to be identical
-    return newpath
+    with open(filepath, 'rb') as filehandle:
+        rawfile = filehandle.read()
+        directory = os.path.dirname(filepath)
+        newpath = directory + '/' + hashlib.sha256(rawfile).hexdigest()
+        if filepath != newpath:
+            shutil.move(filepath, newpath) # Rename file to the sha256sum
+        # Should not matter if "move" overwrites a previously unpacked file 
+        # since they would have to be identical
+        return newpath                  # Return the new path of the file
+    return None                         # Return None if the file could not be opened
 
 def clam_unpack(filepath):
     """
@@ -201,21 +201,13 @@ def clam_unpack(filepath):
             timeout=5
         )
     except subprocess.TimeoutExpired:
-        print("Timeout reached for ClamAV")
+        print('Timeout reached for ClamAV')
         return unpacked             # Timeout reached, return empty list
     except subprocess.CalledProcessError:
         return unpacked             # clamscan crashed, return empty list
     else:
         for root, dirs, files in os.walk(tmpdir, topdown=False):
             for filename in files:
-
-                # TODO: Check if file is a PE file????
-                # Currently also moving icons and other resources?
-                # TODO: What should be done with AutoIt files and other resources?
-                # Some "PE" files are UPX packed scripts
-
-                # TODO: Some files are not renamed
-
                 oldpath = rename_to_sha256(os.path.join(root, filename))
                 newpath = os.path.join(static_unpack_directory, oldpath.split('/')[-1])
                 shutil.move(oldpath, newpath)
