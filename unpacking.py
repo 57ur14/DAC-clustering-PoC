@@ -4,8 +4,6 @@ import os
 import shutil
 import sys
 import threading
-from unipacker.core import Sample
-from unipacker.io_handler import IOHandler
 import subprocess
 import hashlib
 import requests
