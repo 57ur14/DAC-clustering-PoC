@@ -93,6 +93,8 @@ def unipack(filepath):
     Attempt to unpack a file at a given path with unipack.
     Emulates execution over a maximum of 5 seconds in an attempt to unpack PE-files that are packed with "simple" packers.
     Returns a list that can either be empty (could not unpack) or contain a filepath to a file that was unpacked.
+    Dependencies:
+    * unattended-unipacker [https://github.com/ntnu-rgb/unattended-unipacker]
     """
     try:
         subprocess.run(

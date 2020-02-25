@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Based on extract-icon-py by Fadhil Mandaga: https://github.com/firodj/extract-icon-py/
+extract-icon-py is licensed under the MIT license.
+TODO: Create a fork and upload code
 
 Changes:
 * Updated to Python 3

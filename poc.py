@@ -78,10 +78,8 @@ def analyse_file(fullfilepath, family=None, unpacks_from=None):
         try:
             pe = pefile.PE(data=rawfile)
         except Exception as err:
-            print(err)
-            # TODO: Handle when file cannot be parsed (does not 
-            # contain DOS header data and such)
-            return fileinfo
+            return None             # If the file cannot be parsed by pefile, skip it?
+            # TODO: Should probably do something if unpacks_from == None....
         
         pe.parse_data_directories()
         
@@ -106,12 +104,20 @@ def analyse_file(fullfilepath, family=None, unpacks_from=None):
                         analysis_result = analyse_file(unpacked_file, family=family, unpacks_from=fileinfo['sha256'])
                         if analysis_result != None:
                             fileinfo['contained_pe_files'].append(analysis_result)
-                    else:                               # If the file is not a pe file, simply add a hash of the file to "contained resources"
-                        fileinfo['contained_resources'].append(unpacked_file.split('/')[-1])
-                        # TODO: Remove resource from directory of unpacked files or move to another directory?
-            else:                                       # unpacked == None (Could not unpack)
+                            continue
+                    # If the file is not a pe file or the pe file is corrupt, 
+                    # simply add a hash of the unpacked file to "contained resources"
+                    fileinfo['contained_resources'].append(unpacked_file.split('/')[-1])
+        
+        # TODO: Separate clustering into its own function?
+        # Analysis can be performed in parallell by "slaves" provided that a 
+        # single "master" collects and stores the generated data.
+
+            else:                                       # unpacked == [] (Could not unpack any files)
                 if fileinfo['icon_hash'] != None:
                     icon_cluster(fileinfo)
+                elif len(fileinfo['contained_resources']):
+                    pass # TODO: Cluster based on the contained resources?
                 else:                                   # Add to list of unknown files
                     unknown_files[fileinfo['sha256']] = fileinfo
         else:                                           # If file does not seem to be packed / protected
@@ -159,8 +165,12 @@ def tlsh_cluster(file):
         best_cluster['files'].append(file['fullpath'])
 """
 
-#Comparing with all files in all existing tlsh cluster
 def tlsh_cluster(file):
+    """
+    Cluster file based on TrendMicro Locally Sensitive Hash
+    With a threshold of 100, the files should be fairly similar.
+    TODO: Kilde på 100 som threshold
+    """
     threshold  = 100
     best_score = threshold + 1
     best_cluster = None
@@ -177,11 +187,12 @@ def tlsh_cluster(file):
 
 def get_icon_hash(pefile_pe):
     """
-    Retrieve a hash of the icon a Windows system would prefer to use
+    Retrieve a hash of the icon a Windows system would prefer to use.
+    Returns None if no RT_GROUP_ICON was found or the icon could not be extracted properly.
     https://docs.microsoft.com/en-us/windows/win32/menurc/about-icons#icon-display
+    TODO: Beskriv hvorfor xxhash64 brukes: https://aras-p.info/blog/2016/08/02/Hash-Functions-all-the-way-down/
     """
     icon_hash = None
-    # TODO: Beskriv hvorfor xxhash64 brukes: https://aras-p.info/blog/2016/08/02/Hash-Functions-all-the-way-down/
     extract = peicoex.ExtractIcon(pefile_pe=pefile_pe)
     group_icons = extract.get_group_icons()
     if group_icons != None:
@@ -193,12 +204,14 @@ def get_icon_hash(pefile_pe):
             best_icon = extract.best_icon(group)
             raw = extract.export_raw(group, best_icon)
             icon_hash = xxhasher(raw)
-            break # System would only use first icon group (although others might be interesting..)
+            break                   # System would only use first icon group (although others might be interesting..)
     return icon_hash
 
 def load_historic_data():
     """
-    Load historic / training data
+    Load historic / training data. 
+    Retrieves a list of the files from a specified txt file.
+    Sends all files to the "analyse_file" function that extracts features and clusters files.
     """
     
     with open('/home/sturla/poc/train.txt', 'r') as trainfilesfile:
@@ -219,4 +232,5 @@ def load_historic_data():
             #if i == 1000: # TODO: Remove (test with 1000 files)
             #    break
 
-main()
+
+main()                  # Begin exectuion after parsing the whole file
