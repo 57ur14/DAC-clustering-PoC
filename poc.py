@@ -11,9 +11,8 @@ import packer_detection
 import filetype
 
 base_directory = '/home/sturla/IJCNN_10000files/'
-files = {}                  # List of files that are to be clustered
-parent_files = {}
-unknown_files = {}          # List of packed files (should not be compared against for most features)
+files = {}                  # Dictionary of of files that are to be clustered
+unknown_files = {}          # Dictionary of files where no features originating from the original executable were extracted
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
 tlsh_clusters = []          # List of tlsh clusters

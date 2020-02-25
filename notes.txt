@@ -3,9 +3,15 @@ Static: 1166
 Generic: 259
 
 Lisensiering - biblioteker / programmer som benyttes og lisensen de er gitt ut under:
-ClamAV: GPLv2 (kjøres kun via subprocess)
-unipacker: GPLv2 (endret på og må gis ut separat, kjøres kun via subprocess)
-extract-icon-py: MIT (endret på og må gis ut separat med copyright notice)
-Detect It Easy: MIT
+* ClamAV: GPLv2 (kjøres kun via subprocess)
+* unipacker: GPLv2 (endret på og må gis ut separat, kjøres kun via subprocess)
+* extract-icon-py: MIT (endret på og må gis ut separat med copyright notice)
+* Detect It Easy: MIT
+* tlsh: Apache License Version 2.0 / BSD License Version 3 (One may choose between those two)
+* pefile: MIT
+* pyhash: Apache Software License
+* hashlib: Python Software Foundation License
+* filetype: MIT
+* requests: Apache Software License (Apache 2.0)
 
 Når de kjøres som ulike prosesser og kun kommuniserer via kommandolinje-argumenter og pipes regnes det som ulike programmer, og gjør derfor ikke at lisensen må være GPLv2: https://www.gnu.org/licenses/gpl-faq.html#MereAggregation
