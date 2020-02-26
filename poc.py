@@ -11,8 +11,7 @@ import packer_detection
 import filetype
 
 base_directory = '/home/sturla/IJCNN_10000files/'
-files = {}                  # Dictionary of of files that are to be clustered
-unknown_files = {}          # Dictionary of files where no features originating from the original executable were extracted
+files = {}                  # Dictionary of of files
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
 tlsh_clusters = []          # List of tlsh clusters
@@ -44,9 +43,6 @@ def main():
             #print(file['path'])
         print("\n")
     """
-    #for key in parent_files.keys():
-    #    print(parent_files[key])
-    #    print("\n")
 
 def analyse_file(fullfilepath, family=None, unpacks_from=None):
     """
@@ -71,12 +67,16 @@ def analyse_file(fullfilepath, family=None, unpacks_from=None):
             'contained_resources': []
         }
 
+        # Skip analysis if it has been analysed previously?
+        # if fileinfo['sha256'] in files:
+        #     return None
+
         if fileinfo['sha256'] == unpacks_from:
             return None     # Return none if the file is identical to the parent
 
         try:
             pe = pefile.PE(data=rawfile)
-        except Exception as err:
+        except Exception:
             return None             # If the file cannot be parsed by pefile, skip it?
             # TODO: Should probably do something if unpacks_from == None....
         
@@ -89,8 +89,7 @@ def analyse_file(fullfilepath, family=None, unpacks_from=None):
         fileinfo['tlsh'] = tlsh.hash(rawfile)
         fileinfo['obfuscation'] = packer_detection.detect_obfuscation(fullfilepath, pe, fileinfo['pefile_warnings'])
         if len(fileinfo['pefile_warnings']) != 0:       # Simple method of identifying if file seems suspicious
-            # TODO: Investigate peutils -> is_suspicious(pe) (function)
-            fileinfo['suspicious'] = True
+            fileinfo['suspicious'] = True               # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
 
         if fileinfo['obfuscation']['type'] != 'none':   # If file seems to be packed
             # Packed files should be removed from list of other files (to avoid creating clusters of files created with the same packer)
@@ -108,32 +107,28 @@ def analyse_file(fullfilepath, family=None, unpacks_from=None):
                     # simply add a hash of the unpacked file to "contained resources"
                     fileinfo['contained_resources'].append(unpacked_file.split('/')[-1])
         
-        # TODO: Separate clustering into its own function?
-        # Analysis can be performed in parallell by "slaves" provided that a 
-        # single "master" collects and stores the generated data.
-
-            else:                                       # unpacked == [] (Could not unpack any files)
-                if fileinfo['icon_hash'] != None:
-                    icon_cluster(fileinfo)
-                elif len(fileinfo['contained_resources']):
-                    pass # TODO: Cluster based on the contained resources?
-                else:                                   # Add to list of unknown files
-                    unknown_files[fileinfo['sha256']] = fileinfo
-        else:                                           # If file does not seem to be packed / protected
-            if fileinfo['imphash'] != None:
-                imphash_cluster(fileinfo)               # Cluster using imphash if imphash is present
-            elif fileinfo['tlsh'] != None:
-                tlsh_cluster(fileinfo)
-            else:                                       # Add to list of unknown files
-                unknown_files[fileinfo['sha256']] = fileinfo
-
-        if fileinfo['obfuscation']['type'] == 'none':
-            files[fileinfo['sha256']] = fileinfo
-        else:
-            unknown_files[fileinfo['sha256']] = fileinfo
+        files[fileinfo['sha256']] = fileinfo            # Add to list of files
 
         return fileinfo['sha256']                       # Return the sha256sum of the pe file
     return None                                         # Return None if the file could not be opened
+
+def cluster_file(fileinfo):
+    if fileinfo['obfuscation']['type'] == 'none':       # Cluster using basic features of the files if it is not packed
+        if fileinfo['imphash'] != None:
+            imphash_cluster(fileinfo)                   # Cluster using imphash if imphash is present
+        elif fileinfo['tlsh'] != None:
+            tlsh_cluster(fileinfo)                      # Cluster using tlsh if imphash is not present, but tlsh hash is (slow)
+    else:                                               # Cluster using features copied to packed header or features of unpacked files if the file is packed
+        if fileinfo['icon_hash'] != None:
+            icon_cluster(fileinfo)                      # Cluster using a hash of the icon
+        elif len(fileinfo['contained_pe_files']):
+            pass                                        # TODO: Cluster based on unpacked pe files
+        elif len(fileinfo['contained_resources']):
+            pass                                        # TODO: Cluster based on contained resources
+        else:
+            pass                                        # TODO: What should be done if no suitable features were extracted
+    
+
 
 def icon_cluster(file):
     if file['icon_hash'] in icon_clusters:
@@ -227,9 +222,13 @@ def load_historic_data():
             analyse_file(path, family=fam)
             
             i += 1
-            #print("Analysed " + str(i) + " of " + str(num_files) + " files.")
-            #if i == 1000: # TODO: Remove (test with 1000 files)
-            #    break
+            print("Analysed " + str(i) + " of " + str(num_files) + " files.")
+            if i == 10: # TODO: Remove (test with 1000 files)
+                break
+        
+        for fileinfo in files.values():
+            cluster_file(fileinfo)
+
 
 
 main()                  # Begin exectuion after parsing the whole file

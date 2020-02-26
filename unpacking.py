@@ -131,10 +131,8 @@ def rename_to_sha256(filepath):
         rawfile = filehandle.read()
         directory = os.path.dirname(filepath)
         newpath = directory + '/' + hashlib.sha256(rawfile).hexdigest()
-        if filepath != newpath:
+        if filepath != newpath:         # Only rename if it is not already named as the sha256sum
             shutil.move(filepath, newpath) # Rename file to the sha256sum
-        # Should not matter if "move" overwrites a previously unpacked file 
-        # since they would have to be identical
         return newpath                  # Return the new path of the file
     return None                         # Return None if the file could not be opened
 
