@@ -40,30 +40,30 @@ try:
 except FileExistsError:
     pass
 
-def unpack_file(filepath, info, pefile_pe):
+def unpack_file(filepath, fileinfo, pefile_pe):
     """
     Attempt to unpack a file that has been identified to be packed.
     Returns a list of unpacked files. In most cases an empty list or a list with a single filepath.
     """
 
     unpacked = []
-    if 'protector' in info and info['protector'] == 'themida':  # Skip the file if it cannot be unpacked
+    if 'protector' in fileinfo['obfuscation'] and fileinfo['obfuscation']['protector'] == 'themida':  # Skip the file if it cannot be unpacked
         return unpacked                                         # (protected by virtualizers and such)
 
     # is_x86 = pefile_pe.FILE_HEADER.Machine == 0x14c # 0x14c -> Intel 386 or later processors and compatible processors (32-bit PE)
     
-    if info['type'] == 'packed':
-        if 'upx' in info['packer']:
+    if fileinfo['obfuscation']['type'] == 'packed':
+        if 'upx' in fileinfo['obfuscation']['packer']:
             unpacked = unpack_upx(filepath)
         
-    if len(unpacked) == 0 and (('packer' in info and info['packer'] in clam_supported_packers) or ('protector' in info and info['protector'] in clam_supported_packers)):
+    if len(unpacked) == 0 and (('packer' in fileinfo['obfuscation'] and fileinfo['obfuscation']['packer'] in clam_supported_packers) or ('protector' in fileinfo['obfuscation'] and fileinfo['obfuscation']['protector'] in clam_supported_packers)):
         unpacked = clam_unpack(filepath)    # Attempt static unpacking with ClamAV
 
-    if len(unpacked) == 0 and 'packer' in info and info['packer'] in unipack_supported_packers:
+    if len(unpacked) == 0 and 'packer' in fileinfo['obfuscation'] and fileinfo['obfuscation']['packer'] in unipack_supported_packers:
         unpacked = unipack(filepath)        # Attempt to generic unpacking with unipacker
 
-    return unpacked                         # Return the unpacked files
-
+    # Only return files that are not equal to the parent (does not have identical sha256sums):
+    return [unpacked_f for unpacked_f in unpacked if  fileinfo['sha256'] != unpacked_f.split('/')[-1]]
 
 def unpack_upx(filepath):
     """

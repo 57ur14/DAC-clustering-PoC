@@ -12,6 +12,7 @@ import filetype
 
 base_directory = '/home/sturla/IJCNN_10000files/'
 files = {}                  # Dictionary of of files
+non_parsable_files = {}     # Dictionary of files that could not be parsed
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
 tlsh_clusters = []          # List of tlsh clusters
@@ -46,7 +47,7 @@ def main():
 
 def analyse_file(fullfilepath, family=None, unpacks_from=None):
     """
-    Analyse a pe-file at the given filepath.
+    Analyse a pe-file at the given filepath, add to list of files and return sha256sum
     Can also specify the family the pe belongs to (if known) and the 
     sha256sum of the file that that unpacked the incoming file.
 
@@ -67,19 +68,17 @@ def analyse_file(fullfilepath, family=None, unpacks_from=None):
             'contained_resources': []
         }
 
-        # Skip analysis if it has been analysed previously?
+        # TODO: Use previously gathered information if a file with equal hash
+        # already has been analysed?
         # if fileinfo['sha256'] in files:
         #     return None
-
-        if fileinfo['sha256'] == unpacks_from:
-            return None     # Return none if the file is identical to the parent
 
         try:
             pe = pefile.PE(data=rawfile)
         except Exception:
-            return None             # If the file cannot be parsed by pefile, skip it?
-            # TODO: Should probably do something if unpacks_from == None....
-        
+            non_parsable_files[fileinfo['sha256']] = fileinfo   # If the file cannot be parsed by pefile, 
+            return fileinfo['sha256']                           # add to list of files that cannot be parsed
+ 
         pe.parse_data_directories()
         
         # Extract all features regardless of obfuscation
@@ -93,7 +92,7 @@ def analyse_file(fullfilepath, family=None, unpacks_from=None):
 
         if fileinfo['obfuscation']['type'] != 'none':   # If file seems to be packed
             # Packed files should be removed from list of other files (to avoid creating clusters of files created with the same packer)
-            unpacked = unpacking.unpack_file(fullfilepath, fileinfo['obfuscation'], pe)
+            unpacked = unpacking.unpack_file(fullfilepath, fileinfo, pe)
             
             if len(unpacked):
                 fileinfo['contained_pe_files'] = []
@@ -122,11 +121,11 @@ def cluster_file(fileinfo):
         if fileinfo['icon_hash'] != None:
             icon_cluster(fileinfo)                      # Cluster using a hash of the icon
         elif len(fileinfo['contained_pe_files']):
-            pass                                        # TODO: Cluster based on unpacked pe files
+            pass                                        # TODO: Cluster based on unpacked pe files?
         elif len(fileinfo['contained_resources']):
-            pass                                        # TODO: Cluster based on contained resources
+            pass                                        # TODO: Cluster based on contained resources?
         else:
-            pass                                        # TODO: What should be done if no suitable features were extracted
+            pass                                        # TODO: What should be done if no suitable features were extracted?
     
 
 
@@ -176,6 +175,8 @@ def tlsh_cluster(file):
                 best_cluster = cluster
     if best_cluster == None:
         tlsh_clusters.append([{'sha256': file['sha256'], 'tlsh': file['tlsh']}])
+        # TODO: Forsøke å finne en fil i "files" som har høyest mulig score og som 
+        # dermed kan knyttes sammen med denne filen?
     else:
         best_cluster.append({'sha256': file['sha256'], 'tlsh': file['tlsh']})
 
