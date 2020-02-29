@@ -63,7 +63,7 @@ def unpack_file(filepath, fileinfo, pefile_pe):
         unpacked = unipack(filepath)        # Attempt to generic unpacking with unipacker
 
     # Only return files that are not equal to the parent (does not have identical sha256sums):
-    return [unpacked_f for unpacked_f in unpacked if  fileinfo['sha256'] != unpacked_f.split('/')[-1]]
+    return [unpacked_f for unpacked_f in unpacked if  fileinfo['sha256'] != os.path.basename(unpacked_f)]
 
 def unpack_upx(filepath):
     """
@@ -72,8 +72,7 @@ def unpack_upx(filepath):
     Dependencies (can be installed from apt repositories in Ubuntu):
     * upx
     """
-    filename = filepath.split('/')[-1]
-    tmp_path = os.path.join(tmpdir, filename)
+    tmp_path = os.path.join(tmpdir, os.path.basename(filepath))
     shutil.copyfile(filepath, tmp_path)     # Copy file to unpack directory
     try:
         subprocess.run(["upx", "-d", tmp_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
@@ -81,9 +80,10 @@ def unpack_upx(filepath):
         os.remove(tmp_path)                 # Delete copy if it could not be unpacked
         return []                           # Return an empty list if the file could not be unpacked
     else:
-        newpath = os.path.join(static_unpack_directory, filename)
+        tmp_path, newfilename = rename_to_sha256(tmp_path)
+        newpath = os.path.join(static_unpack_directory, newfilename)
         shutil.move(tmp_path, newpath)      # Move file to directory of unpacked files
-        return [rename_to_sha256(newpath)]  # Return new path of the unpacked file if successful
+        return [newpath]                    # Return new path of the unpacked file if successful
 
 def unipack(filepath):
     """
@@ -103,12 +103,11 @@ def unipack(filepath):
             timeout=5
         )                       # If it hasn't finished in 5 seconds, it will likely never succeed
     except subprocess.TimeoutExpired:
-        print("Timeout reached for unipacker")
         return []               # Timeout reached, skip file
     except subprocess.CalledProcessError:
         return []               # unipacker crashed, skip file
     else:
-        return [rename_to_sha256(generic_unpack_directory + 'unpacked_' + filepath.split('/')[-1])]
+        return [rename_to_sha256(generic_unpack_directory + 'unpacked_' + os.path.basename(filepath))[0]]
 
 def arancino_unpack(filepath):
     """
@@ -130,11 +129,12 @@ def rename_to_sha256(filepath):
     with open(filepath, 'rb') as filehandle:
         rawfile = filehandle.read()
         directory = os.path.dirname(filepath)
-        newpath = directory + '/' + hashlib.sha256(rawfile).hexdigest()
-        if filepath != newpath:         # Only rename if it is not already named as the sha256sum
-            shutil.move(filepath, newpath) # Rename file to the sha256sum
-        return newpath                  # Return the new path of the file
-    return None                         # Return None if the file could not be opened
+        sha256sum = hashlib.sha256(rawfile).hexdigest()
+        newpath = directory + '/' + sha256sum
+        if filepath != newpath:             # Only rename if it is not already named as the sha256sum
+            shutil.move(filepath, newpath)  # Rename file to the sha256sum
+        return newpath, sha256sum           # Return the new path of the file and the sha256-sum (filename)
+    return None                             # Return None if the file could not be opened
 
 def clam_unpack(filepath):
     """
@@ -205,8 +205,8 @@ def clam_unpack(filepath):
     else:
         for root, dirs, files in os.walk(tmpdir, topdown=False):
             for filename in files:
-                oldpath = rename_to_sha256(os.path.join(root, filename))
-                newpath = os.path.join(static_unpack_directory, oldpath.split('/')[-1])
+                oldpath, newfilename = rename_to_sha256(os.path.join(root, filename))
+                newpath = os.path.join(static_unpack_directory, newfilename)
                 shutil.move(oldpath, newpath)
                 unpacked.append(newpath)
             for dirname in dirs:

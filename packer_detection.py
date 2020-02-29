@@ -137,6 +137,9 @@ def detect_obfuscation(filepath, pefile_pe, pefile_warnings):
             # where suspicious_imports are "LoadLibrary" and "GetProcAddress"
             if 'Imported symbols contain entries typical of packed executables.' in pefile_warnings:
                 obfuscation = {'type': 'unknown'}
+                # TODO: Kan være pakket selv om 'Imported symbols contain [..]' ikke forekommer. 
+                # Warnings som også ser interessante ut: "Suspicious flags set for section 4. Both IMAGE_SCN_MEM_WRITE and IMAGE_SCN_MEM_EXECUTE are set. This might indicate a packed executable."
+                # Bør kanskje ha en kategori som er "potentially packed" som baserer seg på entropi / strings eller noe slikt?
     return obfuscation
 
 def get_diec_output(filepath):
