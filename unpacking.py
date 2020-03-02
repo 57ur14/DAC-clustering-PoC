@@ -171,7 +171,7 @@ def clam_unpack(filepath):
     unpacked = []
 
     try:
-        clamscan_process = subprocess.run([
+        subprocess.run([
                 'clamscan', 
                 '--debug', 
                 '--leave-temps=yes', 

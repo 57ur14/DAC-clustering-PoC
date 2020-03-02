@@ -4,6 +4,7 @@
 # diec (manual install)
 
 import subprocess
+import peutils
 
 packer_sections = {
     '.aspack': 'aspack',
@@ -135,11 +136,15 @@ def detect_obfuscation(filepath, pefile_pe, pefile_warnings):
             # pefile gives warning if the following condition is true:
             # if suspicious_imports_count == len(suspicious_imports) and total_symbols < 20
             # where suspicious_imports are "LoadLibrary" and "GetProcAddress"
-            if 'Imported symbols contain entries typical of packed executables.' in pefile_warnings:
-                obfuscation = {'type': 'unknown'}
-                # TODO: Kan være pakket selv om 'Imported symbols contain [..]' ikke forekommer. 
-                # Warnings som også ser interessante ut: "Suspicious flags set for section 4. Both IMAGE_SCN_MEM_WRITE and IMAGE_SCN_MEM_EXECUTE are set. This might indicate a packed executable."
-                # Bør kanskje ha en kategori som er "potentially packed" som baserer seg på entropi / strings eller noe slikt?
+            
+            much_high_entropy_data = peutils.is_probably_packed(pefile_pe)
+
+            for section_warning in pefile_warnings:
+                if ((section_warning == 'Imported symbols contain entries typical of packed executables.')
+                        or ('Both IMAGE_SCN_MEM_WRITE and IMAGE_SCN_MEM_EXECUTE are set. This might indicate a packed executable.' in section_warning
+                        and much_high_entropy_data)):
+                    obfuscation = {'type': 'unknown'}   # Highly likely that it is packed
+                    break
     return obfuscation
 
 def get_diec_output(filepath):

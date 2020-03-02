@@ -14,13 +14,12 @@ import filetype
 base_directory = '/home/sturla/IJCNN_10000files/'
 files = {}                  # Dictionary of of files
 non_parsable_files = {}     # Dictionary of files that could not be parsed
-non_clustered_files = []    # List of files that have not been added to any clusters
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
 tlsh_clusters = []          # List of tlsh clusters
-tlsh_nonclustered = []      # List of files (sha256sums) present in any tlsh cluster
 final_clusters = []         # List of clusters created by combining other clusters
 xxhasher = pyhash.xx_64()
+incoming_files = set()      # Set of icoming files (identified by md5sum)
 
 DEBUG = True
 DEBUG_FILECOUNT = 1000
@@ -34,13 +33,15 @@ def main():
 
     write_result_to_files()
 
-def analyse_file(fullfilepath, family=None, unpacks_from=[]):
+def analyse_file(fullfilepath, family=None, unpacks_from=set()):
     """
     Analyse a pe-file at the given filepath, add to list of files and return sha256sum
     Can also specify the family the pe belongs to (if known) and the 
     sha256sum of the file that that unpacked the incoming file.
 
     If "family" is None, it means that the family is unknown.
+
+    TODO: Document arguments and return value
     """
 
     with open(fullfilepath, 'rb') as filehandle:
@@ -53,8 +54,8 @@ def analyse_file(fullfilepath, family=None, unpacks_from=[]):
             'family': family,
             'suspicious': False,
             'unpacks_from': unpacks_from,
-            'contained_pe_files': [],
-            'contained_resources': [],
+            'contained_pe_files': set(),
+            'contained_resources': set(),
             'imphash': None,
             'icon_hash': None,
             'tlsh': tlsh.hash(rawfile),
@@ -63,10 +64,9 @@ def analyse_file(fullfilepath, family=None, unpacks_from=[]):
         }
 
         # Use previously gathered information if a file with equal sha256sum already has been analysed
-        if (fileinfo['sha256'] in files.keys()) and (fileinfo['sha256'] not in files[fileinfo['sha256']]['unpacks_from']):
-            files[fileinfo['sha256']]['unpacks_from'].append(fileinfo['sha256'])
+        if fileinfo['sha256'] in files.keys():
+            files[fileinfo['sha256']]['unpacks_from'].add(fileinfo['sha256'])
             return fileinfo['sha256']
-
 
         try:
             pe = pefile.PE(data=rawfile)
@@ -87,27 +87,29 @@ def analyse_file(fullfilepath, family=None, unpacks_from=[]):
             fileinfo['suspicious'] = True               # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
 
         if fileinfo['obfuscation']['type'] != 'none':   # If file seems to be packed
-            # Packed files should be removed from list of other files (to avoid creating clusters of files created with the same packer)
             unpacked = unpacking.unpack_file(fullfilepath, fileinfo, pe)
             
             for unpacked_file in unpacked:              # For all unpacked files
-                if filetype.guess_mime(unpacked_file) == 'application/x-msdownload': # Check if the file is an "exe" (pe file)
-                    analysis_result = analyse_file(unpacked_file, family=family, unpacks_from=[fileinfo['sha256']])
+                if filetype.guess_mime(unpacked_file) == 'application/x-msdownload':
+                    # Check if the file is an "exe" (pe file) and analyse it if it is
+                    analysis_result = analyse_file(unpacked_file, family=family, unpacks_from=set([fileinfo['sha256']]))
                     if analysis_result != None:
-                        fileinfo['contained_pe_files'].append(analysis_result)
+                        fileinfo['contained_pe_files'].add(analysis_result)
                         continue
                 # If the file is not a pe file or the pe file is corrupt, 
                 # simply add a hash of the unpacked file to "contained resources"
-                fileinfo['contained_resources'].append(os.path.basename(unpacked_file))
+                fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
         
         files[fileinfo['sha256']] = fileinfo            # Add to list of files
-        tlsh_nonclustered.append(fileinfo['sha256'])    # Add to list of files not clustered by tlsh
 
         return fileinfo['sha256']                       # Return the sha256sum of the pe file
     return None                                         # Return None if the file could not be opened
 
 def cluster_file(fileinfo):
-    # TODO: Investigate if multiple families commonly share icon
+    """
+    Cluster the incoming file into existing clusters or create new clusters
+    TODO: Investigate if multiple families commonly share icon (they probably do)
+    """
     if fileinfo['icon_hash'] != None:                   # Cluster using a hash of the icon - fast and should be 
         icon_cluster(fileinfo)                          # suitable for both packed and non-packed samples.
 
@@ -116,14 +118,6 @@ def cluster_file(fileinfo):
             imphash_cluster(fileinfo)                   # Cluster using imphash if imphash is present (fast)
         elif fileinfo['tlsh'] != None:
             tlsh_cluster(fileinfo)                      # Cluster using tlsh if tlsh hash is present, but imphash is not (only use tlsh if no other options since it is slow)
-    else:                                               # Cluster using features copied to packed header or features of unpacked files if the file is packed
-        #elif len(fileinfo['contained_pe_files']):
-        #    pass                                        # TODO: Cluster based on unpacked pe files?
-        #elif len(fileinfo['contained_resources']):
-        #    pass                                        # TODO: Cluster based on contained resources?
-        #else:               # If no suitable features are avialable, add to list of files that have not been clustered
-        #    non_clustered_files.append(fileinfo['sha256'])
-        non_clustered_files.append(fileinfo['sha256'])
 
 def icon_cluster(file):
     if file['icon_hash'] in icon_clusters:
@@ -147,15 +141,16 @@ def tlsh_cluster(file):
     best_score = threshold + 1
     best_cluster = None
     for cluster in tlsh_clusters:
-        for cfile in cluster:
-            score = tlsh.diff(file['tlsh'], cfile['tlsh'])
+        for otherfile in cluster:
+            score = tlsh.diff(file['tlsh'], otherfile['tlsh'])
             if score <= threshold and score < best_score:
                 best_score = score
                 best_cluster = cluster
     
-    if best_cluster == None:                        # If no clusters contained similar files
-        tlsh_clusters.append([{'sha256': file['sha256'], 'tlsh': file['tlsh']}]) # Create new cluster
-        clusterIndex = len(tlsh_clusters) - 1       # Store the index of the cluster
+    if best_cluster == None:
+        # If no clusters contained similar files, create new cluster
+        tlsh_clusters.append([{'sha256': file['sha256'], 'tlsh': file['tlsh']}])
+        clusterIndex = len(tlsh_clusters) - 1   #  Store the index of the cluster
 
         # Attempt to identify if other files not present in any 
         # tlsh-clusters should be clustered with the file
@@ -166,7 +161,6 @@ def tlsh_cluster(file):
                 tlsh_clusters[clusterIndex].append({'sha256': otherfile['sha256'], 'tlsh': otherfile['tlsh']})
                 otherfile['tlsh_cluster'] = clusterIndex
     else:
-        tlsh_nonclustered.remove(file['sha256'])    # Remove from list of files not clustered with tlsh
         best_cluster.append({'sha256': file['sha256'], 'tlsh': file['tlsh']})
 
 def get_icon_hash(pefile_pe):
@@ -183,7 +177,6 @@ def get_icon_hash(pefile_pe):
         best_icon = 0
         for group in group_icons:
             if len(group) == 0:
-                print("No entries in group!")
                 continue
             best_icon = extract.best_icon(group)
             raw = extract.export_raw(group, best_icon)
@@ -193,59 +186,85 @@ def get_icon_hash(pefile_pe):
 
 def load_historic_data():
     """
-    Load historic / training data. 
+    Load historic data
     Retrieves a list of the files from a specified txt file.
     Sends all files to the "analyse_file" function that extracts features and clusters files.
     """
     
-    with open('/home/sturla/poc/train.txt', 'r') as trainfilesfile:
+    with open('/home/sturla/poc/files.txt', 'r') as trainfilesfile:
         train = trainfilesfile.read().splitlines()
         
         num_files = len(train)
 
-        i = 0
+        i = 1
         for trainFile in train:
             path = base_directory + trainFile
-            fam = trainFile.split('/')[0]
+            fam, md5 = trainFile.split('/')
+
+            incoming_files.add(md5)
 
             analyse_file(path, family=fam)
             
-            i += 1
             
             if PRINT_PROGRESS:
                 print("Analysed " + str(i) + " of " + str(num_files) + " files.")
             if DEBUG == True and i == DEBUG_FILECOUNT:
                 break       # Only process a certain number of files if debugging
+            i += 1
         
         for fileinfo in files.values():
             cluster_file(fileinfo)
 
 def create_final_clusters():
+    """
+    TODO: Passer dette til online clustering?
+    Må kanskje heller legge mye av dette inn i "cluster" funksjonen?
+    Og hvis filen er pakket kjøre clustering på "barna" først, for å så sjekke 
+    om barna er i en cluster (og i såfall legge forelderen dit)
+    """
     for fileinfo in files.values():
         if fileinfo['final_cluster'] == None:
-            cluster_set = set()
-            cluster_set.add(fileinfo['sha256'])
-
-            if fileinfo['icon_hash'] != None and CLUSTER_WITH_ICON == True:
-                for sha256sum in icon_clusters[fileinfo['icon_hash']]:
-                    cluster_set.add(sha256sum)
-            if fileinfo['obfuscation']['type'] == 'none':
-                if fileinfo['imphash'] != None:
-                    for sha256sum in imphash_clusters[fileinfo['imphash']]:
-                        cluster_set.add(sha256sum)
-                if fileinfo['tlsh_cluster'] != None:
-                    for otherfile in tlsh_clusters[fileinfo['tlsh_cluster']]:
-                        cluster_set.add(otherfile['sha256'])
-            
+            # Create new cluster if it is not in a final cluster
+            cluster_set = set([fileinfo['sha256']])
             final_clusters.append(cluster_set)
             clusterIndex = len(final_clusters) - 1
             fileinfo['final_cluster'] = clusterIndex
         else:
-            # TODO: Extend the current cluster by this files other features?
-            # Example: It was added to a cluster due to similar TLSH, but is in 
-            # a different imphash cluster with other files not present in the TLSH cluster
-            # that could be added to the current cluster.
-            pass
+            # Or use current cluster if it is in a cluster
+            cluster_set = final_clusters[fileinfo['final_cluster']]
+
+        if CLUSTER_WITH_ICON == True and fileinfo['icon_hash'] != None:
+            for sha256sum in icon_clusters[fileinfo['icon_hash']]:
+                if files[sha256sum]['final_cluster'] == None:
+                    cluster_set.add(sha256sum)
+                    files[sha256sum]['final_cluster'] = fileinfo['final_cluster']
+        if fileinfo['obfuscation']['type'] == 'none':
+            if fileinfo['imphash'] != None:
+                for sha256sum in imphash_clusters[fileinfo['imphash']]:
+                    if files[sha256sum]['final_cluster'] == None:
+                        cluster_set.add(sha256sum)
+                        files[sha256sum]['final_cluster'] = fileinfo['final_cluster']
+            if fileinfo['tlsh_cluster'] != None:
+                for otherfile in tlsh_clusters[fileinfo['tlsh_cluster']]:
+                    if files[otherfile['sha256']]['final_cluster'] == None:
+                        cluster_set.add(otherfile['sha256'])
+                        files[otherfile['sha256']]['final_cluster'] = fileinfo['final_cluster']
+
+            # Add parent files to the cluster of the current file if the parent
+            # is not already present in a cluster or alone in a cluster
+            for parentfile in fileinfo['unpacks_from']:
+                # If the parent file is alone in a cluster
+                if (files[parentfile]['final_cluster'] != None 
+                        and len(final_clusters[files[parentfile]['final_cluster']]) == 1):
+                    # Remove from the cluster (but don't remove the cluster from 
+                    # the list of clusters) before adding to the cluster of the child
+                    final_clusters[files[parentfile]['final_cluster']].remove(parentfile)
+                    files[parentfile]['final_cluster'] = None
+
+                if files[parentfile]['final_cluster'] == None:
+                    # Add to cluster of the child if the parent is not in a cluster
+                    cluster_set.add(parentfile)
+                    files[parentfile]['final_cluster'] = fileinfo['final_cluster']
 
 def write_result_to_files():
     """
@@ -283,16 +302,29 @@ def write_result_to_files():
     with open('results/nonparsable.txt', 'w') as outfile:
         for fileinfo in non_parsable_files.values():
             outfile.write(str(fileinfo) + "\n\n")
-    
-    with open('results/nonclustered.txt', 'w') as outfile:
-        for file_checksum in non_clustered_files:
-            outfile.write(file_checksum + "\n")
 
     with open('results/final_clusters.txt', 'w') as outfile:
         for cluster in final_clusters:
+            if len(cluster) == 1:
+                continue                # Skip clusters with only 1 file
             for file_checksum in cluster:
-                outfile.write(file_checksum + " " + files[file_checksum]['family'] + "\n")
+                if files[file_checksum]['md5'] in incoming_files:
+                    outfile.write("+")  # Incoming file clustered
+                else:
+                    outfile.write("-")  # Unpacked file, can be ignored
+                outfile.write(file_checksum + ' ' + files[file_checksum]['family'] + ' ' + files[file_checksum]['md5'] + "\n")
             outfile.write("\n")
+
+    with open('results/nonclustered.txt', 'w') as outfile:
+        for fileinfo in files.values():
+            # Output list of files that are alone in a cluster or not in any cluster
+            if fileinfo['final_cluster'] == None or len(final_clusters[fileinfo['final_cluster']]) == 1:
+                if fileinfo['md5'] in incoming_files:
+                    outfile.write("-")  # Incoming file not clustered (failure)
+                else:
+                    outfile.write("+")  # New file (unpacked from other, can be ignored)
+                outfile.write(fileinfo['sha256'] + ' ' + fileinfo['family'] + ' ' + fileinfo['md5'] + "\n" )
+
 
 
 main()                  # Begin exectuion after parsing the whole file

@@ -3,4 +3,4 @@ __pycache__/
 
 config.ini
 .unipacker_brokenimport.exe
-results/
+*results/
