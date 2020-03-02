@@ -28,9 +28,19 @@ CLUSTER_WITH_ICON = False
 
 def main():
     load_historic_data()
+    """
+    TODO: Skill ut "final clustering" i et eget program. 
+    Benytt pickling for å lagre og prosessere data?
+    Vil gjøre det lettere å fokusere på én ting av gangen!!!
 
+    import pickle
+    with open('files.pkl', 'wb') as picklefile:
+        pickle.dump(files, picklefile)
+
+    with open('fles.pkl', 'rb') as picklefile:
+        files = pickle.load(picklefile)
+    """
     create_final_clusters()
-
     write_result_to_files()
 
 def analyse_file(fullfilepath, family=None, unpacks_from=set()):
@@ -75,7 +85,7 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set()):
             return None                                         # add to list of files that cannot be parsed
  
         pe.parse_data_directories()
-        
+
         # Extract all features regardless of obfuscation
         fileinfo['icon_hash'] = get_icon_hash(pe)
         fileinfo['pefile_warnings'] = pe.get_warnings()
@@ -99,7 +109,7 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set()):
                 # If the file is not a pe file or the pe file is corrupt, 
                 # simply add a hash of the unpacked file to "contained resources"
                 fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
-        
+
         files[fileinfo['sha256']] = fileinfo            # Add to list of files
 
         return fileinfo['sha256']                       # Return the sha256sum of the pe file
@@ -222,7 +232,11 @@ def create_final_clusters():
     Og hvis filen er pakket kjøre clustering på "barna" først, for å så sjekke 
     om barna er i en cluster (og i såfall legge forelderen dit)
     """
+    total_pe_files = 0
+    obfuscated_pe_files = 0
+
     for fileinfo in files.values():
+        total_pe_files += 1
         if fileinfo['final_cluster'] == None:
             # Create new cluster if it is not in a final cluster
             cluster_set = set([fileinfo['sha256']])
@@ -265,6 +279,10 @@ def create_final_clusters():
                     # Add to cluster of the child if the parent is not in a cluster
                     cluster_set.add(parentfile)
                     files[parentfile]['final_cluster'] = fileinfo['final_cluster']
+        else:
+            obfuscated_pe_files += 1
+    print("Number obfuscated pe files: " + str(obfuscated_pe_files))
+    print("Total pe files: " + str(total_pe_files))
 
 def write_result_to_files():
     """
@@ -307,6 +325,9 @@ def write_result_to_files():
         for cluster in final_clusters:
             if len(cluster) == 1:
                 continue                # Skip clusters with only 1 file
+                # TODO: Er mange filer som kun clusteres sammen med én utpakket fil
+                # Det vil egentlig være lite hensiktsmessig å ta med dette som egne clustere.
+                # Disse bør også fjernes (og så kan man heller skrive ut dette under nonclustered)
             for file_checksum in cluster:
                 if files[file_checksum]['md5'] in incoming_files:
                     outfile.write("+")  # Incoming file clustered
