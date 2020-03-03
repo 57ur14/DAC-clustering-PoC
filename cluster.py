@@ -2,13 +2,14 @@
 # -*- coding: utf-8 -*-
 
 import configparser
+import pickle
 
 import tlsh
 
 config = configparser.ConfigParser()
 config.read('config.ini')
 DEBUG = config.getboolean('clustering', 'debug')
-DEBUG_FILECOUNT = config['clustering']['debug_filecount']
+DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 
@@ -31,19 +32,19 @@ def cluster_file(fileinfo):
         elif fileinfo['tlsh'] != None:
             tlsh_cluster(fileinfo)                      # Cluster using tlsh if tlsh hash is present, but imphash is not (only use tlsh if no other options since it is slow)
 
-def icon_cluster(file):
-    if file['icon_hash'] in icon_clusters:
-        icon_clusters[file['icon_hash']].append(file['sha256'])
+def icon_cluster(fileinfo):
+    if fileinfo['icon_hash'] in icon_clusters:
+        icon_clusters[fileinfo['icon_hash']].append(fileinfo['sha256'])
     else:
-        icon_clusters[file['icon_hash']] = [file['sha256']]
+        icon_clusters[fileinfo['icon_hash']] = [fileinfo['sha256']]
 
-def imphash_cluster(file):
-    if file['imphash'] in imphash_clusters:
-        imphash_clusters[file['imphash']].append(file['sha256'])
+def imphash_cluster(fileinfo):
+    if fileinfo['imphash'] in imphash_clusters:
+        imphash_clusters[fileinfo['imphash']].append(fileinfo['sha256'])
     else:
-        imphash_clusters[file['imphash']] = [file['sha256']]
+        imphash_clusters[fileinfo['imphash']] = [fileinfo['sha256']]
 
-def tlsh_cluster(file):
+def tlsh_cluster(fileinfo):
     """
     Cluster file based on TrendMicro Locally Sensitive Hash
     With a threshold of 100, the files should be fairly similar.
@@ -54,26 +55,40 @@ def tlsh_cluster(file):
     best_cluster = None
     for cluster in tlsh_clusters:
         for otherfile in cluster:
-            score = tlsh.diff(file['tlsh'], otherfile['tlsh'])
+            score = tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])
             if score <= threshold and score < best_score:
                 best_score = score
                 best_cluster = cluster
     
     if best_cluster == None:
         # If no clusters contained similar files, create new cluster
-        tlsh_clusters.append([{'sha256': file['sha256'], 'tlsh': file['tlsh']}])
+        tlsh_clusters.append([{'sha256': fileinfo['sha256'], 'tlsh': fileinfo['tlsh']}])
         clusterIndex = len(tlsh_clusters) - 1   #  Store the index of the cluster
 
         # Attempt to identify if other files not present in any 
         # tlsh-clusters should be clustered with the file
         for otherfile in files.values():
             if (otherfile['tlsh_cluster'] == None 
-                    and file['sha256'] != otherfile['sha256']
-                    and tlsh.diff(file['tlsh'], otherfile['tlsh']) <= threshold):
+                    and fileinfo['sha256'] != otherfile['sha256']
+                    and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh']) <= threshold):
                 tlsh_clusters[clusterIndex].append({'sha256': otherfile['sha256'], 'tlsh': otherfile['tlsh']})
                 otherfile['tlsh_cluster'] = clusterIndex
     else:
-        best_cluster.append({'sha256': file['sha256'], 'tlsh': file['tlsh']})
+        best_cluster.append({'sha256': fileinfo['sha256'], 'tlsh': fileinfo['tlsh']})
 
-# TODO: Read from pickle and iterate over files to cluster them
-# TODO: Write to new pickle
+# Read files from pickle
+with open('pickles/files.pkl', 'rb') as picklefile:
+    files = pickle.load(picklefile)
+
+for fileinfo in files:              # Iterate over files to cluster them
+    cluster_file(fileinfo)
+
+# Write results to pickles to allow further processing
+with open('pickles/files.pkl', 'wb') as picklefile:
+    pickle.dump(files, picklefile)
+with open('pickles/imphash_clusters.pkl', 'wb') as picklefile:
+    pickle.dump(imphash_clusters, picklefile)
+with open('pickles/icon_clusters.pkl', 'wb') as picklefile:
+    pickle.dump(icon_clusters, picklefile)
+with open('pickles/tlsh_clusters.pkl', 'wb') as picklefile:
+    pickle.dump(tlsh_clusters, picklefile)

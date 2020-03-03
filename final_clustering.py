@@ -3,11 +3,12 @@
 
 import configparser
 import os
+import pickle
 
 config = configparser.ConfigParser()
 config.read('config.ini')
 DEBUG = config.getboolean('clustering', 'debug')
-DEBUG_FILECOUNT = config['clustering']['debug_filecount']
+DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 
@@ -140,3 +141,23 @@ def write_result_to_files():
                 else:
                     outfile.write("+")  # New file (unpacked from other, can be ignored)
                 outfile.write(fileinfo['sha256'] + ' ' + fileinfo['family'] + ' ' + fileinfo['md5'] + "\n" )
+
+# Read from pickles
+with open('pickles/files.pkl', 'rb') as picklefile:
+    files = pickle.load(picklefile)
+with open('pickles/imphash_clusters.pkl', 'rb') as picklefile:
+    imphash_clusters = pickle.load(picklefile)
+with open('pickles/icon_clusters.pkl', 'rb') as picklefile:
+    icon_clusters = pickle.load(picklefile)
+with open('pickles/tlsh_clusters.pkl', 'rb') as picklefile:
+    tlsh_clusters = pickle.load(picklefile)
+with open('pickles/incoming_files.pkl', 'rb') as picklefile:
+    incoming_files = pickle.load(picklefile)
+with open('pickles/non_parsable_files.pkl', 'rb') as picklefile:
+    non_parsable_files = pickle.load(picklefile)
+
+# Cluster by using union on other clusters
+create_final_clusters()
+
+# Write results to files
+write_result_to_files()

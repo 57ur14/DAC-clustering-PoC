@@ -4,6 +4,7 @@
 import configparser
 import hashlib
 import os
+import pickle
 
 import filetype
 import pefile
@@ -16,10 +17,8 @@ import unpacking
 config = configparser.ConfigParser()
 config.read('config.ini')
 DEBUG = config.getboolean('clustering', 'debug')
-DEBUG_FILECOUNT = config['clustering']['debug_filecount']
+DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
-CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
-
 
 xxhasher = pyhash.xx_64()
 base_directory = '/home/sturla/IJCNN_10000files/'
@@ -138,10 +137,18 @@ def load_historic_data():
             
             if PRINT_PROGRESS:
                 print("Analysed " + str(i) + " of " + str(num_files) + " files.")
+            
             if DEBUG == True and i == DEBUG_FILECOUNT:
                 break       # Only process a certain number of files if debugging
             i += 1
-    # Output results to a pickle to allow further processing
     
 
 load_historic_data()
+
+# Output results to pickles to allow further processing
+with open('pickles/files.pkl', 'wb') as picklefile:
+    pickle.dump(files, picklefile)
+with open('pickles/incoming_files.pkl', 'wb') as picklefile:
+    pickle.dump(incoming_files, picklefile)
+with open('pickles/non_parsable_files.pkl', 'wb') as picklefile:
+    pickle.dump(non_parsable_files, picklefile)
