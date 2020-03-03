@@ -1,80 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os
-import tlsh
-import hashlib
-import pefile
-import filetype
-import pyhash
-import peicoex
-import extract_features
-import unpacking
-import packer_detection
+import configparser
 
+config = configparser.ConfigParser()
+config.read('config.ini')
+DEBUG = config.getboolean('clustering', 'debug')
+DEBUG_FILECOUNT = config['clustering']['debug_filecount']
+PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
+CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 
-base_directory = '/home/sturla/IJCNN_10000files/'
 files = {}                  # Dictionary of of files
-non_parsable_files = {}     # Dictionary of files that could not be parsed
-imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
-icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
-tlsh_clusters = []          # List of tlsh clusters
 final_clusters = []         # List of clusters created by combining other clusters
-xxhasher = pyhash.xx_64()
-incoming_files = set()      # Set of icoming files (identified by md5sum)
-
-DEBUG = True
-DEBUG_FILECOUNT = 1000
-PRINT_PROGRESS = True
-CLUSTER_WITH_ICON = False
-
-def main():
-    load_historic_data()
-    """
-    TODO: Skill ut "final clustering" i et eget program. 
-    Benytt pickling for å lagre og prosessere data?
-    Vil gjøre det lettere å fokusere på én ting av gangen!!!
-
-    import pickle
-    with open('files.pkl', 'wb') as picklefile:
-        pickle.dump(files, picklefile)
-
-    with open('fles.pkl', 'rb') as picklefile:
-        files = pickle.load(picklefile)
-    """
-    create_final_clusters()
-    write_result_to_files()
-
-def load_historic_data():
-    """
-    Load historic data
-    Retrieves a list of the files from a specified txt file.
-    Sends all files to the "analyse_file" function that extracts features and clusters files.
-    """
-    
-    with open('/home/sturla/poc/files.txt', 'r') as trainfilesfile:
-        train = trainfilesfile.read().splitlines()
-        
-        num_files = len(train)
-
-        i = 1
-        for trainFile in train:
-            path = base_directory + trainFile
-            fam, md5 = trainFile.split('/')
-
-            incoming_files.add(md5)
-
-            analyse_file(path, family=fam)
-            
-            
-            if PRINT_PROGRESS:
-                print("Analysed " + str(i) + " of " + str(num_files) + " files.")
-            if DEBUG == True and i == DEBUG_FILECOUNT:
-                break       # Only process a certain number of files if debugging
-            i += 1
-        
-        for fileinfo in files.values():
-            cluster_file(fileinfo)
 
 def create_final_clusters():
     """
@@ -196,8 +133,3 @@ def write_result_to_files():
                 else:
                     outfile.write("+")  # New file (unpacked from other, can be ignored)
                 outfile.write(fileinfo['sha256'] + ' ' + fileinfo['family'] + ' ' + fileinfo['md5'] + "\n" )
-
-
-
-main()                  # Begin exectuion after parsing the whole file
-print("Done")

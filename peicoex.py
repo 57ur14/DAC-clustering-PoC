@@ -6,11 +6,12 @@ extract-icon-py is licensed under the MIT license.
 TODO: Create a fork and upload code
 
 Changes:
-* Updated to Python 3
+* Updated to run with Python 3
 * Replaced tabs with four spaces
 * Replaced StringIO with BytesIO
 * Added the option of providing a pefile PE object in stead of path
 * Added resillience with exception handling against exceptions that occur when parsing certain files
+* Added the functions "get_windows_preferred_icon" and "get_raw_windows_preferred_icon"
 
 Requirements:
 * pefile
@@ -134,6 +135,34 @@ class ExtractIcon(object):
                 b = icon.BitCount
                 best = i
         return best
+
+    def get_windows_preferred_icon(self):
+        """
+        Identify the group and the index of the icon windows normally would display.
+        Returns the group and the icon index. These values can be used as input for
+        other functions in this class to retrieve the icon itself.
+        """
+        group_icons = self.get_group_icons()
+        if group_icons != None:
+            best_icon = 0
+            for group in group_icons:
+                if len(group) == 0:
+                    continue
+                best_icon = self.best_icon(group)
+                return group, best_icon
+        return None, None
+
+    def get_raw_windows_preferred_icon(self):
+        """
+        Retrieve the (raw) icon that Windows normally would display.
+        Returns the icon if a suitable icon was found. 
+        If no suitable icon was found, None is returned.
+        """
+        group, icon = self.get_windows_preferred_icon()
+        if group != None and icon != None:
+            return self.export_raw(group, icon)
+        else:
+            return None
 
     def get_icon(self, index):
         icon_entry = self.find_resource('RT_ICON', -index)
