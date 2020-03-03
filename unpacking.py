@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 
-# Dependencies:
-# * diec (must be installed and added to path manually)
+# External dependencies:
+# * pefile
+# * requests
+# * diec - https://github.com/horsicq/Detect-It-Easy (must be installed and added to path manually)
 # * clamav
 # * libclamunrar9
-# * unattended-unipacker (https://github.com/ntnu-rgb/unattended-unipacker)
+# * unattended-unipacker - https://github.com/ntnu-rgb/unattended-unipacker
 # * upx
 
 import hashlib

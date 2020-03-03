@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+# External dependencies:
+# * filetype
+# * pyhash
+# * pefile
+# * pefile-extract-icon - https://github.com/ntnu-rgb/pefile-extract-icon
+
 import configparser
 import hashlib
 import os
@@ -11,7 +17,7 @@ import pefile
 import pyhash
 import tlsh
 
-import peicoex
+import extract_icon
 import unpacking
 
 config = configparser.ConfigParser()
@@ -106,7 +112,7 @@ def get_icon_hash(pefile_pe):
     https://docs.microsoft.com/en-us/windows/win32/menurc/about-icons#icon-display
     TODO: Beskriv hvorfor xxhash64 brukes: https://aras-p.info/blog/2016/08/02/Hash-Functions-all-the-way-down/
     """
-    extract = peicoex.ExtractIcon(pefile_pe=pefile_pe)
+    extract = extract_icon.ExtractIcon(pefile_pe=pefile_pe)
     raw = extract.get_raw_windows_preferred_icon()
     if raw != None:
         return xxhasher(raw)
