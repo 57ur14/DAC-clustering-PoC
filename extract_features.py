@@ -26,7 +26,6 @@ base_directory = '/home/sturla/IJCNN_10000files/'
 
 files = {}                  # Dictionary of of files
 non_parsable_files = {}     # Dictionary of files that could not be parsed
-imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 incoming_files = set()      # Set of icoming files (identified by md5sum)
 
 def analyse_file(fullfilepath, family=None, unpacks_from=set()):
@@ -142,6 +141,7 @@ def load_historic_data():
             if DEBUG == True and i == DEBUG_FILECOUNT:
                 break       # Only process a certain number of files if debugging
             i += 1
-    # TODO: Write to pickle
+    # Output results to a pickle to allow further processing
+    
 
 load_historic_data()

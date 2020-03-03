@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import configparser
+import os
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -12,6 +13,12 @@ CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 
 files = {}                  # Dictionary of of files
 final_clusters = []         # List of clusters created by combining other clusters
+non_parsable_files = {}     # Dictionary of files that could not be parsed
+incoming_files = set()      # Set of icoming files (identified by md5sum)
+
+imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
+icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
+tlsh_clusters = []          # List of tlsh clusters
 
 def create_final_clusters():
     """
