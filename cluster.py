@@ -8,8 +8,6 @@ import tlsh
 
 config = configparser.ConfigParser()
 config.read('config.ini')
-DEBUG = config.getboolean('clustering', 'debug')
-DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 
@@ -80,8 +78,15 @@ def tlsh_cluster(fileinfo):
 with open('pickles/files.pkl', 'rb') as picklefile:
     files = pickle.load(picklefile)
 
-for fileinfo in files:              # Iterate over files to cluster them
+num_files = len(files)
+i = 1
+
+for fileinfo in files.values():     # Iterate over files to cluster them
     cluster_file(fileinfo)
+    if PRINT_PROGRESS:
+        print("Clustered " + str(i) + " of " + str(num_files) + " files.")
+
+    i += 1
 
 # Write results to pickles to allow further processing
 with open('pickles/files.pkl', 'wb') as picklefile:

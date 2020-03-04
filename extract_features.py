@@ -140,7 +140,6 @@ def load_historic_data():
 
             analyse_file(path, family=fam)
             
-            
             if PRINT_PROGRESS:
                 print("Analysed " + str(i) + " of " + str(num_files) + " files.")
             

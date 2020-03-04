@@ -156,6 +156,7 @@ with open('pickles/incoming_files.pkl', 'rb') as picklefile:
 with open('pickles/non_parsable_files.pkl', 'rb') as picklefile:
     non_parsable_files = pickle.load(picklefile)
 
+
 # Cluster by using union on other clusters
 create_final_clusters()
 
