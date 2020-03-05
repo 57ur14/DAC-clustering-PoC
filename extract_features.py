@@ -2,15 +2,19 @@
 # -*- coding: utf-8 -*-
 
 # External dependencies:
-# * filetype
-# * pyhash
-# * pefile
-# * pefile-extract-icon - https://github.com/ntnu-rgb/pefile-extract-icon
+# filetype:                     pip3 install filetype
+# pyhash:                       pip3 install pyhash
+# pefile:                       pip3 install pefile
+# pefile-extract-icon:          https://github.com/ntnu-rgb/pefile-extract-icon
+# ruby:                         apt-get install ruby
+# metasm:                       gem install metasm
+# ruby-machoc_simplified.rb:    https://github.com/ntnu-rgb/ruby-machoc_simplified (the script must be added to PATH)
 
 import configparser
 import hashlib
 import os
 import pickle
+import subprocess
 
 import filetype
 import pefile
@@ -25,6 +29,7 @@ config.read('config.ini')
 DEBUG = config.getboolean('clustering', 'debug')
 DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
+MACHOC_TIMEOUT = config.getint('clustering', 'machoc_timeout')
 
 xxhasher = pyhash.xx_64()
 base_directory = '/home/sturla/IJCNN_10000files/'
@@ -60,8 +65,10 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set()):
             'icon_hash': None,
             'tlsh': tlsh.hash(rawfile),
             'tlsh_cluster': None,
+            'machoc': None,
             'final_cluster': None
         }
+        # TODO: Kun hent ut imphash, tlsh, og machoc hash hvis filen ikke er obfuskert?
 
         # Use previously gathered information if a file with equal sha256sum already has been analysed
         if fileinfo['sha256'] in files.keys():
@@ -82,6 +89,9 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set()):
         fileinfo['imphash'] = pe.get_imphash()
         if fileinfo['imphash'] == '':
             fileinfo['imphash'] = None
+        fileinfo['machoc'] = get_machoc_hash(fullfilepath)
+        if fileinfo['machoc'] == '':
+            fileinfo['machoc'] = None
         fileinfo['obfuscation'] = unpacking.detect_obfuscation(fullfilepath, pe, fileinfo['pefile_warnings'])
         if len(fileinfo['pefile_warnings']) != 0:       # Simple method of identifying if file seems suspicious
             fileinfo['suspicious'] = True               # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
@@ -119,6 +129,21 @@ def get_icon_hash(pefile_pe):
     else:
         return None
 
+def get_machoc_hash(filepath):
+    """
+    Retrieve the machoc hash of an executable at a given filepath.
+    Please ensure that ruby-machoc_simplified.rb is located in a directory included in PATH
+    """
+    try:
+        metasm_process = subprocess.run(['ruby-machoc_simplified.rb', filepath], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=MACHOC_TIMEOUT, check=True)
+    except subprocess.TimeoutExpired:
+        return None                     # Timeout expired. Monitor frequency of this?
+    except subprocess.CalledProcessError:
+        return None
+    else:
+        machoc_hash = metasm_process.stdout.decode('utf-8')
+        return machoc_hash
+
 def load_historic_data():
     """
     Load historic data
@@ -146,7 +171,6 @@ def load_historic_data():
             if DEBUG == True and i == DEBUG_FILECOUNT:
                 break       # Only process a certain number of files if debugging
             i += 1
-    
 
 load_historic_data()
 
