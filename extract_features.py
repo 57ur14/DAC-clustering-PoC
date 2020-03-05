@@ -3,12 +3,13 @@
 
 # External dependencies:
 # filetype:                     pip3 install filetype
-# pyhash:                       pip3 install pyhash
 # pefile:                       pip3 install pefile
+# pyhash:                       pip3 install pyhash
+# tlsh:                         pip3 install tlsh
 # pefile-extract-icon:          https://github.com/ntnu-rgb/pefile-extract-icon
+# ruby-machoc_simplified.rb:    https://github.com/ntnu-rgb/ruby-machoc_simplified (the script must be added to PATH)
 # ruby:                         apt-get install ruby
 # metasm:                       gem install metasm
-# ruby-machoc_simplified.rb:    https://github.com/ntnu-rgb/ruby-machoc_simplified (the script must be added to PATH)
 
 import configparser
 import hashlib
@@ -63,9 +64,10 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set()):
             'contained_resources': set(),
             'imphash': None,
             'icon_hash': None,
-            'tlsh': tlsh.hash(rawfile),
+            'tlsh': None,
             'tlsh_cluster': None,
             'machoc': None,
+            'machoc_cluster': None,
             'final_cluster': None
         }
         # TODO: Kun hent ut imphash, tlsh, og machoc hash hvis filen ikke er obfuskert?
@@ -86,12 +88,7 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set()):
         # Extract all features regardless of obfuscation
         fileinfo['icon_hash'] = get_icon_hash(pe)
         fileinfo['pefile_warnings'] = pe.get_warnings()
-        fileinfo['imphash'] = pe.get_imphash()
-        if fileinfo['imphash'] == '':
-            fileinfo['imphash'] = None
-        fileinfo['machoc'] = get_machoc_hash(fullfilepath)
-        if fileinfo['machoc'] == '':
-            fileinfo['machoc'] = None
+        
         fileinfo['obfuscation'] = unpacking.detect_obfuscation(fullfilepath, pe, fileinfo['pefile_warnings'])
         if len(fileinfo['pefile_warnings']) != 0:       # Simple method of identifying if file seems suspicious
             fileinfo['suspicious'] = True               # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
@@ -109,6 +106,14 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set()):
                 # If the file is not a pe file or the pe file is corrupt, 
                 # simply add a hash of the unpacked file to "contained resources"
                 fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
+        else:                                           # If file does not seem packed
+            fileinfo['imphash'] = pe.get_imphash()      # Extract features suitable
+            if fileinfo['imphash'] == '':               # for non-packed files such as
+                fileinfo['imphash'] = None              # imphash, machoc hash and tlsh
+            fileinfo['machoc'] = get_machoc_hash(fullfilepath)
+            if fileinfo['machoc'] == '':
+                fileinfo['machoc'] = None
+            fileinfo['tlsh'] = tlsh.hash(rawfile)
 
         files[fileinfo['sha256']] = fileinfo            # Add to list of files
 
@@ -142,7 +147,12 @@ def get_machoc_hash(filepath):
         return None
     else:
         machoc_hash = metasm_process.stdout.decode('utf-8')
-        return machoc_hash
+        # Remove ; and : from machoc hash
+        machoc_hash = machoc_hash.replace(';', '').replace(':', '')
+        if machoc_hash != '':
+            return machoc_hash
+        else:
+            return None
 
 def load_historic_data():
     """
