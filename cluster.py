@@ -23,8 +23,6 @@ icon_clusters = {}          # Dictionary of clusters where files have equal icon
 machoc_clusters = []        # List of machoc clusters
 tlsh_clusters = []          # List of tlsh clusters
 
-jaccard_index = textdistance.Jaccard.distance
-
 def cluster_file(fileinfo):
     """
     Cluster the incoming file into existing clusters or create new clusters
@@ -65,7 +63,7 @@ def machoc_cluster(fileinfo):
     clusterIndex = None
     for index, cluster in enumerate(machoc_clusters):
         for otherfile in cluster:
-            score = jaccard_index(fileinfo['machoc'], otherfile['machoc'])
+            score = textdistance.jaccard(fileinfo['machoc'], otherfile['machoc'])
             if score >= threshold and score > best_score:
                 best_score = score
                 best_cluster = cluster
@@ -80,13 +78,19 @@ def machoc_cluster(fileinfo):
 
         # Attempt to identify if other files not present in any 
         # machoc clusters should be clustered with the file
+        
         for otherfile in files.values():
+
+            # TODO: fjern når feature extraction er gjort på nytt:
+            if 'machoc_cluster' not in otherfile:
+                otherfile['machoc_cluster'] = None
+
             if (otherfile['machoc'] != None
                     and otherfile['machoc_cluster'] == None
                     and fileinfo['sha256'] != otherfile['sha256']
-                    and jaccard_index(fileinfo['machoc'], otherfile['machoc'])):
-                    machoc_clusters[clusterIndex].append({'sha256': otherfile['sha256'], 'machoc': otherfile['machoc'])
-                    otherfile['machoc_cluster'] = clusterIndex        
+                    and textdistance.jaccard(fileinfo['machoc'], otherfile['machoc']) >= threshold):
+                machoc_clusters[clusterIndex].append({'sha256': otherfile['sha256'], 'machoc': otherfile['machoc']})
+                otherfile['machoc_cluster'] = clusterIndex        
 
 def tlsh_cluster(fileinfo):
     """

@@ -16,9 +16,11 @@ files = {}                  # Dictionary of of files
 final_clusters = []         # List of clusters created by combining other clusters
 non_parsable_files = {}     # Dictionary of files that could not be parsed
 incoming_files = set()      # Set of icoming files (identified by md5sum)
+nonclustered = set()        # Set of files not belonging to a cluster
 
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
+machoc_clusters = []        # List of machoc clusters
 tlsh_clusters = []          # List of tlsh clusters
 
 def create_final_clusters():
@@ -54,6 +56,11 @@ def create_final_clusters():
                     if files[sha256sum]['final_cluster'] == None:
                         cluster_set.add(sha256sum)
                         files[sha256sum]['final_cluster'] = fileinfo['final_cluster']
+            if fileinfo['machoc_cluster'] != None:
+                for otherfile in machoc_clusters[fileinfo['machoc_cluster']]:
+                    if files[otherfile['sha256']]['final_cluster'] == None:
+                        cluster_set.add(otherfile['sha256'])
+                        files[otherfile['sha256']]['final_cluster'] = fileinfo['final_cluster']
             if fileinfo['tlsh_cluster'] != None:
                 for otherfile in tlsh_clusters[fileinfo['tlsh_cluster']]:
                     if files[otherfile['sha256']]['final_cluster'] == None:
@@ -77,6 +84,24 @@ def create_final_clusters():
                     files[parentfile]['final_cluster'] = fileinfo['final_cluster']
         else:
             obfuscated_pe_files += 1
+
+    for cluster in final_clusters:
+        if len(cluster) == 1:                   # Move files to "nonclustered"
+            sha256 = cluster.pop()              # if they are alone in a cluster
+            nonclustered.add(sha256)
+            files[sha256]['final_cluster'] = None
+        elif len(cluster) == 2:                 # Move files to "nonclustered"
+            f1 = cluster.pop()                  # if one file was unpacked from
+            f2 = cluster.pop()                  # the other file.
+            if files[f1]['unpacks_from'] == f2 or files[f2]['unpacks_from'] == f1:
+                nonclustered.add(f1)
+                nonclustered.add(f2)
+                files[f1]['final_cluster'] = None
+                files[f2]['final_cluster'] = None
+            else:
+                cluster.add(f1)
+                cluster.add(f2)
+    
     print("Number obfuscated pe files: " + str(obfuscated_pe_files))
     print("Total pe files: " + str(total_pe_files))
 
@@ -107,6 +132,12 @@ def write_result_to_files():
             for file in imphash_clusters[imphash]:
                 outfile.write(file + "\n")
     
+    with open('results/machoc_cluster.txt', 'w') as outfile:
+        for cluster in machoc_clusters:
+            outfile.write("\n")
+            for fileinfo in cluster:
+                outfile.write(str(fileinfo) + "\n")
+
     with open('results/tlsh_cluster.txt' ,'w') as outfile:
         for cluster in tlsh_clusters:
             outfile.write("\n")
@@ -119,11 +150,8 @@ def write_result_to_files():
 
     with open('results/final_clusters.txt', 'w') as outfile:
         for cluster in final_clusters:
-            if len(cluster) == 1:
-                continue                # Skip clusters with only 1 file
-                # TODO: Er mange filer som kun clusteres sammen med én utpakket fil
-                # Det vil egentlig være lite hensiktsmessig å ta med dette som egne clustere.
-                # Disse bør også fjernes (og så kan man heller skrive ut dette under nonclustered)
+            if len(cluster) == 0:
+                continue                # Skip clusters with no files
             for file_checksum in cluster:
                 if files[file_checksum]['md5'] in incoming_files:
                     outfile.write("+")  # Incoming file clustered
@@ -135,7 +163,7 @@ def write_result_to_files():
     with open('results/nonclustered.txt', 'w') as outfile:
         for fileinfo in files.values():
             # Output list of files that are alone in a cluster or not in any cluster
-            if fileinfo['final_cluster'] == None or len(final_clusters[fileinfo['final_cluster']]) == 1:
+            if fileinfo['final_cluster'] == None:
                 if fileinfo['md5'] in incoming_files:
                     outfile.write("-")  # Incoming file not clustered (failure)
                 else:
@@ -149,6 +177,8 @@ with open('pickles/imphash_clusters.pkl', 'rb') as picklefile:
     imphash_clusters = pickle.load(picklefile)
 with open('pickles/icon_clusters.pkl', 'rb') as picklefile:
     icon_clusters = pickle.load(picklefile)
+with open('pickles/machoc_clusters.pkl', 'rb') as picklefile:
+    machoc_clusters = pickle.load(picklefile)
 with open('pickles/tlsh_clusters.pkl', 'rb') as picklefile:
     tlsh_clusters = pickle.load(picklefile)
 with open('pickles/incoming_files.pkl', 'rb') as picklefile:
