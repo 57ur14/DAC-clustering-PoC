@@ -15,8 +15,20 @@ CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 files = {}                  # Dictionary of of files
 final_clusters = []         # List of clusters created by combining other clusters
 non_parsable_files = {}     # Dictionary of files that could not be parsed
-incoming_files = set()      # Set of icoming files (identified by md5sum)
+incoming_files = set()      # Set of icoming files (identified by md5)
 nonclustered = set()        # Set of files not belonging to a cluster
+stats = {
+    'number_of_incoming_pe': 0,
+    'unpacked_pe_files': 0,
+    'total_pe_files': 0,
+    'obfuscated_pe_files': 0,
+    'number_of_good_clusters': 0,
+    'total_clustered_files': 0,
+    'mean_cluster_size': 0,
+    'successfully_clustered_incoming': 0,
+    'not_clustered_incoming': 0,
+    'share_successful': 0
+}                           # Dictionary to store statistics of the clustering
 
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
@@ -30,11 +42,9 @@ def create_final_clusters():
     Og hvis filen er pakket kjøre clustering på "barna" først, for å så sjekke 
     om barna er i en cluster (og i såfall legge forelderen dit)
     """
-    total_pe_files = 0
-    obfuscated_pe_files = 0
 
     for fileinfo in files.values():
-        total_pe_files += 1
+        stats['total_pe_files'] += 1
         if fileinfo['final_cluster'] == None:
             # Create new cluster if it is not in a final cluster
             cluster_set = set([fileinfo['sha256']])
@@ -83,17 +93,24 @@ def create_final_clusters():
                     cluster_set.add(parentfile)
                     files[parentfile]['final_cluster'] = fileinfo['final_cluster']
         else:
-            obfuscated_pe_files += 1
+            stats['obfuscated_pe_files'] += 1
 
+    # Filter out certain files that are in very small clusters
+    # TODO: Filter filter clutsers that only contain 1 or 0 "incoming_files"?
     for cluster in final_clusters:
         if len(cluster) == 1:                   # Move files to "nonclustered"
             sha256 = cluster.pop()              # if they are alone in a cluster
             nonclustered.add(sha256)
             files[sha256]['final_cluster'] = None
-        elif len(cluster) == 2:                 # Move files to "nonclustered"
-            f1 = cluster.pop()                  # if one file was unpacked from
-            f2 = cluster.pop()                  # the other file.
-            if files[f1]['unpacks_from'] == f2 or files[f2]['unpacks_from'] == f1:
+        elif len(cluster) == 2:
+            # Move files to "nonclustered" if one file was unpacked from the 
+            # other file, or less than 2 files were originally incoming files
+            f1 = cluster.pop()
+            f2 = cluster.pop()
+            if (files[f1]['unpacks_from'] == f2 
+                    or files[f2]['unpacks_from'] == f1
+                    or files[f1]['md5'] not in incoming_files
+                    or files[f2]['md5'] not in incoming_files):
                 nonclustered.add(f1)
                 nonclustered.add(f2)
                 files[f1]['final_cluster'] = None
@@ -101,9 +118,67 @@ def create_final_clusters():
             else:
                 cluster.add(f1)
                 cluster.add(f2)
+        else:
+            # Check if the cluster contains at least 2 files that are in "incoming_files"
+            number_of_incoming_files_in_cluster = 0
+            for sha256 in cluster:
+                if files[sha256]['md5'] in incoming_files:
+                    number_of_incoming_files_in_cluster += 1
+            if number_of_incoming_files_in_cluster < 2:
+                # Remove cluster if less than 2 files were incoming
+                for sha256 in cluster:
+                    nonclustered.add(sha256)
+                    files[sha256]['final_cluster'] = None
+                cluster.clear()
+            else:
+                stats['total_clustered_files'] += len(cluster)
+                stats['number_of_good_clusters'] += 1
     
-    print("Number obfuscated pe files: " + str(obfuscated_pe_files))
-    print("Total pe files: " + str(total_pe_files))
+    for fileinfo in files.values():
+        # For all files that were incoming (and not unpacked from another PE)
+        if fileinfo['md5'] in incoming_files:
+            if fileinfo['final_cluster'] != None:   # Successful if in a cluster
+                stats['successfully_clustered_incoming'] += 1
+            else:                                   # Unsuccessful if not in a cluster
+                stats['not_clustered_incoming'] += 1
+    
+    # Identify cluster "purity"
+    mean_purity = 0
+    num_real_clusters = 0
+    num_pure_clusters = 0
+
+    for cluster in final_clusters:
+        if len(cluster) == 0:
+            continue
+
+        num_real_clusters += 1
+        families_in_cluster = {}
+        for sha256 in cluster:
+            family = files[sha256]['family']
+            if family not in families_in_cluster:
+                families_in_cluster[family] = 1
+            else:
+                families_in_cluster[family] += 1
+        # Retrieve the most common family (might be even, but should not matter)
+        most_common_family = max(families_in_cluster, key=families_in_cluster.get)
+        num_files_in_cluster = sum(families_in_cluster.values())
+        num_files_in_most_common = families_in_cluster[most_common_family]
+        #num_in_other_families = num_files_in_cluster - num_files_in_most_common
+        cluster_purity = num_files_in_most_common / num_files_in_cluster
+        mean_purity += cluster_purity
+        if num_files_in_most_common == num_files_in_cluster:
+            num_pure_clusters += 1
+
+    stats['number_of_incoming_pe'] = len(incoming_files)
+    stats['unpacked_pe_files'] = stats['total_pe_files'] - stats['number_of_incoming_pe']
+    stats['mean_cluster_size'] = stats['total_clustered_files'] / stats['number_of_good_clusters']
+    stats['share_successful'] = stats['successfully_clustered_incoming'] / stats['number_of_incoming_pe']
+    stats['mean_purity'] = mean_purity / num_real_clusters
+    stats['total_pure_clusters'] = num_pure_clusters
+    stats['total_clusters'] = num_real_clusters
+
+    for key, value in stats.items():
+        print(str(key) + ": " + str(value))
 
 def write_result_to_files():
     """
