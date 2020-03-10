@@ -20,6 +20,7 @@ CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 files = {}                  # Dictionary of of files
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
+resource_clusters = {}      # Dictionary of clusters where files have equal resources contained
 machoc_clusters = []        # List of machoc clusters
 tlsh_clusters = []          # List of tlsh clusters
 
@@ -30,6 +31,9 @@ def cluster_file(fileinfo):
     """
     if fileinfo['icon_hash'] != None:                   # Cluster using a hash of the icon - fast and should be 
         icon_cluster(fileinfo)                          # suitable for both packed and non-packed samples.
+
+    if len(fileinfo['contained_resources']) != 0:
+        cluster_on_contained_resources(fileinfo)
 
     if fileinfo['obfuscation']['type'] == 'none':       # Cluster using basic features of the files if it is not packed
         if fileinfo['imphash'] != None:                 # Cluster using imphash if imphash is present (fast)
@@ -50,6 +54,14 @@ def imphash_cluster(fileinfo):
         imphash_clusters[fileinfo['imphash']].append(fileinfo['sha256'])
     else:
         imphash_clusters[fileinfo['imphash']] = [fileinfo['sha256']]
+
+def cluster_on_contained_resources(fileinfo):
+    for resource in fileinfo['contained_resources']:
+        if resource in resource_clusters.keys():
+            resource_clusters[resource].add(fileinfo['sha256'])
+        else:
+            resource_clusters[resource] = set([fileinfo['sha256']])
+
 
 def machoc_cluster(fileinfo):
     """
@@ -153,3 +165,5 @@ with open('pickles/machoc_clusters.pkl', 'wb') as picklefile:
     pickle.dump(machoc_clusters, picklefile)
 with open('pickles/tlsh_clusters.pkl', 'wb') as picklefile:
     pickle.dump(tlsh_clusters, picklefile)
+with open('pickles/resource_clusters.pkl', 'wb') as picklefile:
+    pickle.dump(resource_clusters, picklefile)

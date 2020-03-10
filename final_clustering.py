@@ -11,6 +11,7 @@ DEBUG = config.getboolean('clustering', 'debug')
 DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
+CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
 
 files = {}                  # Dictionary of of files
 final_clusters = []         # List of clusters created by combining other clusters
@@ -32,6 +33,7 @@ stats = {
 
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
+
 machoc_clusters = []        # List of machoc clusters
 tlsh_clusters = []          # List of tlsh clusters
 
@@ -49,8 +51,7 @@ def create_final_clusters():
             # Create new cluster if it is not in a final cluster
             cluster_set = set([fileinfo['sha256']])
             final_clusters.append(cluster_set)
-            clusterIndex = len(final_clusters) - 1
-            fileinfo['final_cluster'] = clusterIndex
+            fileinfo['final_cluster'] = len(final_clusters) - 1
         else:
             # Or use current cluster if it is in a cluster
             cluster_set = final_clusters[fileinfo['final_cluster']]
@@ -60,6 +61,14 @@ def create_final_clusters():
                 if files[sha256sum]['final_cluster'] == None:
                     cluster_set.add(sha256sum)
                     files[sha256sum]['final_cluster'] = fileinfo['final_cluster']
+
+        if CLUSTER_WITH_RESOURCES == True and len(fileinfo['contained_resources']) != 0:
+            for resource in fileinfo['contained_resources']:
+                for file_sha256 in resource_clusters[resource]:
+                    if files[file_sha256]['final_cluster'] == None:
+                        cluster_set.add(file_sha256)
+                        files[file_sha256]['final_cluster'] = fileinfo['final_cluster']
+        
         if fileinfo['obfuscation']['type'] == 'none':
             if fileinfo['imphash'] != None:
                 for sha256sum in imphash_clusters[fileinfo['imphash']]:
@@ -252,6 +261,8 @@ with open('pickles/imphash_clusters.pkl', 'rb') as picklefile:
     imphash_clusters = pickle.load(picklefile)
 with open('pickles/icon_clusters.pkl', 'rb') as picklefile:
     icon_clusters = pickle.load(picklefile)
+with open('pickles/resource_clusters.pkl', 'rb') as picklefile:
+    resource_clusters = pickle.load(picklefile)
 with open('pickles/machoc_clusters.pkl', 'rb') as picklefile:
     machoc_clusters = pickle.load(picklefile)
 with open('pickles/tlsh_clusters.pkl', 'rb') as picklefile:

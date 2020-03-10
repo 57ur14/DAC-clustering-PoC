@@ -25,4 +25,4 @@ I noen tilfeller ser merkingen ut til å være feil (clusteringen stemmer) baser
 
 Clustere blir kun beskrevet som endelig cluster til output dersom:
 * Minst 2 filer i clusteren er filer som opprinnelig kom inn til programmet. En cluster med 1 fil som opprinnelig kom inn og én fil som har blitt pakket ut vil ikke være nyttig ettersom man fortsatt har like mange filer å analysere. Tilsvarende vil en cluster med kun utpakkede filer heller ikke være nyttig som output.
-Dersom man legger til en slags union clustering i online clusteringen vil det være veldig nyttig å beholde clustere med kun utpakkede filer (i tilfelle det kommer en ny fil senere som hadde hørt til der), men det er ikke nyttig som output.
+* Dersom man legger til en slags union clustering i online clusteringen vil det være veldig nyttig å beholde clustere med kun utpakkede filer (i tilfelle det kommer en ny fil senere som hadde hørt til der), men det er ikke nyttig som output.
