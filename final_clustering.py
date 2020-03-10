@@ -62,7 +62,7 @@ def create_final_clusters():
                     cluster_set.add(sha256sum)
                     files[sha256sum]['final_cluster'] = fileinfo['final_cluster']
 
-        if CLUSTER_WITH_RESOURCES == True and len(fileinfo['contained_resources']) != 0:
+        if CLUSTER_WITH_RESOURCES == True:
             for resource in fileinfo['contained_resources']:
                 for file_sha256 in resource_clusters[resource]:
                     if files[file_sha256]['final_cluster'] == None:
