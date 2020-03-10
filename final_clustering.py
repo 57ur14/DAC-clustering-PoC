@@ -12,6 +12,9 @@ DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
+CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
+CLUSTER_WITH_MACHOC = config.getboolean('clustering', 'cluster_with_machoc')
+CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 
 files = {}                  # Dictionary of of files
 final_clusters = []         # List of clusters created by combining other clusters
@@ -70,17 +73,17 @@ def create_final_clusters():
                         files[file_sha256]['final_cluster'] = fileinfo['final_cluster']
         
         if fileinfo['obfuscation']['type'] == 'none':
-            if fileinfo['imphash'] != None:
+            if CLUSTER_WITH_IMPHASH == True and fileinfo['imphash'] != None:
                 for sha256sum in imphash_clusters[fileinfo['imphash']]:
                     if files[sha256sum]['final_cluster'] == None:
                         cluster_set.add(sha256sum)
                         files[sha256sum]['final_cluster'] = fileinfo['final_cluster']
-            if fileinfo['machoc_cluster'] != None:
+            if CLUSTER_WITH_MACHOC == True and fileinfo['machoc_cluster'] != None:
                 for otherfile in machoc_clusters[fileinfo['machoc_cluster']]:
                     if files[otherfile['sha256']]['final_cluster'] == None:
                         cluster_set.add(otherfile['sha256'])
                         files[otherfile['sha256']]['final_cluster'] = fileinfo['final_cluster']
-            if fileinfo['tlsh_cluster'] != None:
+            if CLUSTER_WITH_TLSH == True and fileinfo['tlsh_cluster'] != None:
                 for otherfile in tlsh_clusters[fileinfo['tlsh_cluster']]:
                     if files[otherfile['sha256']]['final_cluster'] == None:
                         cluster_set.add(otherfile['sha256'])
@@ -105,7 +108,7 @@ def create_final_clusters():
             stats['obfuscated_pe_files'] += 1
 
     # Filter out certain files that are in very small clusters
-    # TODO: Filter filter clutsers that only contain 1 or 0 "incoming_files"?
+    # TODO: Filter clutsers that only contain 1 or 0 "incoming_files"?
     for cluster in final_clusters:
         if len(cluster) == 1:                   # Move files to "nonclustered"
             sha256 = cluster.pop()              # if they are alone in a cluster

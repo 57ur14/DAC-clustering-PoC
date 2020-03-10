@@ -16,6 +16,10 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
+CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
+CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
+CLUSTER_WITH_MACHOC = config.getboolean('clustering', 'cluster_with_machoc')
+CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 
 files = {}                  # Dictionary of of files
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
@@ -29,18 +33,18 @@ def cluster_file(fileinfo):
     Cluster the incoming file into existing clusters or create new clusters
     TODO: Investigate if multiple families commonly share icon (they probably do)
     """
-    if fileinfo['icon_hash'] != None:                   # Cluster using a hash of the icon - fast and should be 
+    if CLUSTER_WITH_ICON == True and fileinfo['icon_hash'] != None:         # Cluster using a hash of the icon - fast and should be 
         icon_cluster(fileinfo)                          # suitable for both packed and non-packed samples.
 
-    if len(fileinfo['contained_resources']) != 0:
+    if CLUSTER_WITH_RESOURCES == True and len(fileinfo['contained_resources']) != 0:
         cluster_on_contained_resources(fileinfo)
 
     if fileinfo['obfuscation']['type'] == 'none':       # Cluster using basic features of the files if it is not packed
-        if fileinfo['imphash'] != None:                 # Cluster using imphash if imphash is present (fast)
+        if CLUSTER_WITH_IMPHASH == True and fileinfo['imphash'] != None:    # Cluster using imphash if imphash is present (fast)
             imphash_cluster(fileinfo)
-        elif fileinfo['machoc'] != None:                # Cluster using machoc hash if present (slow but accurate)
+        elif CLUSTER_WITH_MACHOC == True and fileinfo['machoc'] != None:    # Cluster using machoc hash if present (slow but accurate)
             machoc_cluster(fileinfo)
-        else:                                           # Cluster using tlsh if no other suitable option
+        elif CLUSTER_WITH_TLSH == True:                 # Cluster using tlsh if no other suitable option
             tlsh_cluster(fileinfo)                      # TLSH should always be present (slow but fairly accurate)
 
 def icon_cluster(fileinfo):
@@ -92,11 +96,6 @@ def machoc_cluster(fileinfo):
         # machoc clusters should be clustered with the file
         
         for otherfile in files.values():
-
-            # TODO: fjern når feature extraction er gjort på nytt:
-            if 'machoc_cluster' not in otherfile:
-                otherfile['machoc_cluster'] = None
-
             if (otherfile['machoc'] != None
                     and otherfile['machoc_cluster'] == None
                     and fileinfo['sha256'] != otherfile['sha256']

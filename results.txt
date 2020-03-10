@@ -1,0 +1,102 @@
+# All combined #
+
+# Only TLSH #
+number_of_incoming_pe: 9823
+unpacked_pe_files: 1947
+total_pe_files: 11770
+obfuscated_pe_files: 7930
+number_of_good_clusters: 210
+total_clustered_files: 2686
+mean_cluster_size: 12.790476190476191
+successfully_clustered_incoming: 2031
+not_clustered_incoming: 7792
+share_successful: 0.20675964572941058
+mean_purity: 0.9473584559212244
+total_pure_clusters: 267
+total_clusters: 309
+Writing output to the directory results/
+
+real	1m39,222s
+user	1m36,685s
+sys	0m1,964s
+
+# Only imphash #
+number_of_incoming_pe: 9823
+unpacked_pe_files: 1947
+total_pe_files: 11770
+obfuscated_pe_files: 7930
+number_of_good_clusters: 218
+total_clustered_files: 1807
+mean_cluster_size: 8.288990825688073
+successfully_clustered_incoming: 1600
+not_clustered_incoming: 8223
+share_successful: 0.162883029624351
+mean_purity: 0.9812830334885062
+total_pure_clusters: 318
+total_clusters: 334
+Writing output to the directory results/
+
+real	0m1,922s
+user	0m1,446s
+sys	0m0,359s
+
+# Only machoc #
+number_of_incoming_pe: 9823
+unpacked_pe_files: 1947
+total_pe_files: 11770
+obfuscated_pe_files: 7930
+number_of_good_clusters: 52
+total_clustered_files: 3666
+mean_cluster_size: 70.5
+successfully_clustered_incoming: 2926
+not_clustered_incoming: 6897
+share_successful: 0.2978723404255319
+mean_purity: 0.6929761087747085
+total_pure_clusters: 21
+total_clusters: 56
+Writing output to the directory results/
+
+real	104m28,649s
+user	104m12,725s
+sys	0m7,579s
+
+# Only icon #
+number_of_incoming_pe: 9823
+unpacked_pe_files: 1947
+total_pe_files: 11770
+obfuscated_pe_files: 7930
+number_of_good_clusters: 316
+total_clustered_files: 4668
+mean_cluster_size: 14.772151898734178
+successfully_clustered_incoming: 4392
+not_clustered_incoming: 5431
+share_successful: 0.4471139163188435
+mean_purity: 0.8970666597465271
+total_pure_clusters: 351
+total_clusters: 484
+Writing output to the directory results/
+
+real	0m2,341s
+user	0m1,786s
+sys	0m0,429s
+
+# Only resources #
+number_of_incoming_pe: 9823
+unpacked_pe_files: 1947
+total_pe_files: 11770
+obfuscated_pe_files: 7930
+number_of_good_clusters: 3
+total_clustered_files: 23
+mean_cluster_size: 7.666666666666667
+successfully_clustered_incoming: 17
+not_clustered_incoming: 9806
+share_successful: 0.0017306321897587295
+mean_purity: 0.9583333333333334
+total_pure_clusters: 3
+total_clusters: 4
+Writing output to the directory results/
+
+real	0m2,139s
+user	0m1,593s
+sys	0m0,372s
+
