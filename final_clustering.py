@@ -258,21 +258,21 @@ def write_result_to_files():
                 outfile.write(fileinfo['sha256'] + ' ' + fileinfo['family'] + ' ' + fileinfo['md5'] + "\n" )
 
 # Read from pickles
-with open('pickles/files.pkl', 'rb') as picklefile:
+with open('pickles/clustering/files.pkl', 'rb') as picklefile:
     files = pickle.load(picklefile)
-with open('pickles/imphash_clusters.pkl', 'rb') as picklefile:
+with open('pickles/clustering/imphash_clusters.pkl', 'rb') as picklefile:
     imphash_clusters = pickle.load(picklefile)
-with open('pickles/icon_clusters.pkl', 'rb') as picklefile:
+with open('pickles/clustering/icon_clusters.pkl', 'rb') as picklefile:
     icon_clusters = pickle.load(picklefile)
-with open('pickles/resource_clusters.pkl', 'rb') as picklefile:
+with open('pickles/clustering/resource_clusters.pkl', 'rb') as picklefile:
     resource_clusters = pickle.load(picklefile)
-with open('pickles/machoc_clusters.pkl', 'rb') as picklefile:
+with open('pickles/clustering/machoc_clusters.pkl', 'rb') as picklefile:
     machoc_clusters = pickle.load(picklefile)
-with open('pickles/tlsh_clusters.pkl', 'rb') as picklefile:
+with open('pickles/clustering/tlsh_clusters.pkl', 'rb') as picklefile:
     tlsh_clusters = pickle.load(picklefile)
-with open('pickles/incoming_files.pkl', 'rb') as picklefile:
+with open('pickles/feature_extraction/incoming_files.pkl', 'rb') as picklefile:
     incoming_files = pickle.load(picklefile)
-with open('pickles/non_parsable_files.pkl', 'rb') as picklefile:
+with open('pickles/feature_extraction/non_parsable_files.pkl', 'rb') as picklefile:
     non_parsable_files = pickle.load(picklefile)
 
 

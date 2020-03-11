@@ -184,10 +184,16 @@ def load_historic_data():
 
 load_historic_data()
 
+try:
+    os.mkdir('pickles')
+    os.mkdir('pickles/feature_extraction')
+except FileExistsError:
+    pass
+
 # Output results to pickles to allow further processing
-with open('pickles/files.pkl', 'wb') as picklefile:
+with open('pickles/feature_extraction/files.pkl', 'wb') as picklefile:
     pickle.dump(files, picklefile)
-with open('pickles/incoming_files.pkl', 'wb') as picklefile:
+with open('pickles/feature_extraction/incoming_files.pkl', 'wb') as picklefile:
     pickle.dump(incoming_files, picklefile)
-with open('pickles/non_parsable_files.pkl', 'wb') as picklefile:
+with open('pickles/feature_extraction/non_parsable_files.pkl', 'wb') as picklefile:
     pickle.dump(non_parsable_files, picklefile)

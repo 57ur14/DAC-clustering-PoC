@@ -1,4 +1,27 @@
-# All combined #
+# Feature extraction IJCNN data set #
+real	664m58,369s
+user	551m51,524s
+sys	18m51,993s
+
+# All combined (except icon) #
+number_of_incoming_pe: 9823
+unpacked_pe_files: 1925
+total_pe_files: 11748
+obfuscated_pe_files: 7903
+number_of_good_clusters: 191
+total_clustered_files: 2846
+mean_cluster_size: 14.900523560209423
+successfully_clustered_incoming: 2148
+not_clustered_incoming: 7675
+share_successful: 0.21867046727069123
+mean_purity: 0.942066959373851
+total_pure_clusters: 237
+total_clusters: 273
+Writing output to the directory results/
+
+real	3m37,938s
+user	3m35,617s
+sys	0m1,043s
 
 # Only TLSH #
 number_of_incoming_pe: 9823

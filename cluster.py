@@ -7,6 +7,7 @@
 
 
 import configparser
+import os
 import pickle
 
 import textdistance
@@ -133,14 +134,15 @@ def tlsh_cluster(fileinfo):
         # Attempt to identify if other files not present in any 
         # tlsh clusters should be clustered with the file
         for otherfile in files.values():
-            if (otherfile['tlsh_cluster'] == None 
+            if (otherfile['tlsh'] != None
+                    and otherfile['tlsh_cluster'] == None 
                     and fileinfo['sha256'] != otherfile['sha256']
                     and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh']) <= threshold):
                 tlsh_clusters[clusterIndex].append({'sha256': otherfile['sha256'], 'tlsh': otherfile['tlsh']})
                 otherfile['tlsh_cluster'] = clusterIndex
 
 # Read files from pickle
-with open('pickles/files.pkl', 'rb') as picklefile:
+with open('pickles/feature_extraction/files.pkl', 'rb') as picklefile:
     files = pickle.load(picklefile)
 
 num_files = len(files)
@@ -153,16 +155,21 @@ for fileinfo in files.values():     # Iterate over files to cluster them
 
     i += 1
 
+try:
+    os.mkdir('pickles/clustering')
+except FileExistsError:
+    pass
+
 # Write results to pickles to allow further processing
-with open('pickles/files.pkl', 'wb') as picklefile:
+with open('pickles/clustering/files.pkl', 'wb') as picklefile:
     pickle.dump(files, picklefile)
-with open('pickles/imphash_clusters.pkl', 'wb') as picklefile:
+with open('pickles/clustering/imphash_clusters.pkl', 'wb') as picklefile:
     pickle.dump(imphash_clusters, picklefile)
-with open('pickles/icon_clusters.pkl', 'wb') as picklefile:
+with open('pickles/clustering/icon_clusters.pkl', 'wb') as picklefile:
     pickle.dump(icon_clusters, picklefile)
-with open('pickles/machoc_clusters.pkl', 'wb') as picklefile:
+with open('pickles/clustering/machoc_clusters.pkl', 'wb') as picklefile:
     pickle.dump(machoc_clusters, picklefile)
-with open('pickles/tlsh_clusters.pkl', 'wb') as picklefile:
+with open('pickles/clustering/tlsh_clusters.pkl', 'wb') as picklefile:
     pickle.dump(tlsh_clusters, picklefile)
-with open('pickles/resource_clusters.pkl', 'wb') as picklefile:
+with open('pickles/clustering/resource_clusters.pkl', 'wb') as picklefile:
     pickle.dump(resource_clusters, picklefile)
