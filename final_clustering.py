@@ -19,7 +19,7 @@ CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 files = {}                  # Dictionary of of files
 final_clusters = []         # List of clusters created by combining other clusters
 non_parsable_files = {}     # Dictionary of files that could not be parsed
-incoming_files = set()      # Set of icoming files (identified by md5)
+incoming_files = set()      # Set of icoming files (identified by sha256)
 nonclustered = set()        # Set of files not belonging to a cluster
 stats = {
     'number_of_incoming_pe': 0,
@@ -121,8 +121,8 @@ def create_final_clusters():
             f2 = cluster.pop()
             if (files[f1]['unpacks_from'] == f2 
                     or files[f2]['unpacks_from'] == f1
-                    or files[f1]['md5'] not in incoming_files
-                    or files[f2]['md5'] not in incoming_files):
+                    or files[f1]['sha256'] not in incoming_files
+                    or files[f2]['sha256'] not in incoming_files):
                 nonclustered.add(f1)
                 nonclustered.add(f2)
                 files[f1]['final_cluster'] = None
@@ -134,7 +134,7 @@ def create_final_clusters():
             # Check if the cluster contains at least 2 files that are in "incoming_files"
             number_of_incoming_files_in_cluster = 0
             for sha256 in cluster:
-                if files[sha256]['md5'] in incoming_files:
+                if files[sha256]['sha256'] in incoming_files:
                     number_of_incoming_files_in_cluster += 1
             if number_of_incoming_files_in_cluster < 2:
                 # Remove cluster if less than 2 files were incoming
@@ -148,7 +148,7 @@ def create_final_clusters():
     
     for fileinfo in files.values():
         # For all files that were incoming (and not unpacked from another PE)
-        if fileinfo['md5'] in incoming_files:
+        if fileinfo['sha256'] in incoming_files:
             if fileinfo['final_cluster'] != None:   # Successful if in a cluster
                 stats['successfully_clustered_incoming'] += 1
             else:                                   # Unsuccessful if not in a cluster
@@ -240,7 +240,7 @@ def write_result_to_files():
             if len(cluster) == 0:
                 continue                # Skip clusters with no files
             for file_checksum in cluster:
-                if files[file_checksum]['md5'] in incoming_files:
+                if files[file_checksum]['sha256'] in incoming_files:
                     outfile.write("+")  # Incoming file clustered
                 else:
                     outfile.write("-")  # Unpacked file, can be ignored
@@ -251,7 +251,7 @@ def write_result_to_files():
         for fileinfo in files.values():
             # Output list of files that are alone in a cluster or not in any cluster
             if fileinfo['final_cluster'] == None:
-                if fileinfo['md5'] in incoming_files:
+                if fileinfo['sha256'] in incoming_files:
                     outfile.write("-")  # Incoming file not clustered (failure)
                 else:
                     outfile.write("+")  # New file (unpacked from other, can be ignored)

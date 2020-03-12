@@ -37,15 +37,16 @@ base_directory = '/home/sturla/IJCNN_10000files/'
 
 files = {}                  # Dictionary of of files
 non_parsable_files = {}     # Dictionary of files that could not be parsed
-incoming_files = set()      # Set of icoming files (identified by md5sum)
+incoming_files = set()      # Set of icoming files (identified by sha256)
 
-def analyse_file(fullfilepath, family=None, unpacks_from=set()):
+def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
     """
     Analyse a pe-file at the given filepath, add to list of files and return sha256sum
     Can also specify the family the pe belongs to (if known) and the 
     sha256sum of the file that that unpacked the incoming file.
 
     If "family" is None, it means that the family is unknown.
+    If "incoming" is True, the file is added to the "incoming files" set.
 
     TODO: Document arguments and return value
     """
@@ -70,7 +71,9 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set()):
             'machoc_cluster': None,
             'final_cluster': None
         }
-        # TODO: Kun hent ut imphash, tlsh, og machoc hash hvis filen ikke er obfuskert?
+        
+        if incoming == True:
+            incoming_files.add(fileinfo['sha256'])
 
         # Use previously gathered information if a file with equal sha256sum already has been analysed
         if fileinfo['sha256'] in files.keys():
@@ -161,7 +164,7 @@ def load_historic_data():
     Sends all files to the "analyse_file" function that extracts features and clusters files.
     """
     
-    with open('/home/sturla/poc/files.txt', 'r') as trainfilesfile:
+    with open('/home/sturla/online-dac/files.txt', 'r') as trainfilesfile:
         train = trainfilesfile.read().splitlines()
         
         num_files = len(train)
@@ -169,11 +172,10 @@ def load_historic_data():
         i = 1
         for trainFile in train:
             path = base_directory + trainFile
-            fam, md5 = trainFile.split('/')
+            family = trainFile.split('/')[0]
 
-            incoming_files.add(md5)
-
-            analyse_file(path, family=fam)
+            # Process an incoming file:
+            analyse_file(path, family=family, incoming=True)
             
             if PRINT_PROGRESS:
                 print("Analysed " + str(i) + " of " + str(num_files) + " files.")
