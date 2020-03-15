@@ -34,8 +34,9 @@ def cluster_file(fileinfo):
     Cluster the incoming file into existing clusters or create new clusters
     TODO: Investigate if multiple families commonly share icon (they probably do)
     """
+
     if CLUSTER_WITH_ICON == True and fileinfo['icon_hash'] != None:         # Cluster using a hash of the icon - fast and should be 
-        icon_cluster(fileinfo)                          # suitable for both packed and non-packed samples.
+        icon_cluster(fileinfo)                          # suitable for both packed and non-packed samples (but slightly unaccurate)
 
     if CLUSTER_WITH_RESOURCES == True and len(fileinfo['contained_resources']) != 0:
         cluster_on_contained_resources(fileinfo)
@@ -47,6 +48,18 @@ def cluster_file(fileinfo):
             machoc_cluster(fileinfo)
         elif CLUSTER_WITH_TLSH == True:                 # Cluster using tlsh if no other suitable option
             tlsh_cluster(fileinfo)                      # TLSH should always be present (slow but fairly accurate)
+
+    # TODO Add to union cluster
+    # Priority if not obfuscated:
+    # 1. imphash
+    # 2. Resources
+    # 3. TLSH
+    # 4. Icon
+    # 5. Machoc
+    # Priority if obfuscated:
+    # 1. Contained resources
+    # 2. Parent file
+    # 3. Icon
 
 def icon_cluster(fileinfo):
     if fileinfo['icon_hash'] in icon_clusters:
