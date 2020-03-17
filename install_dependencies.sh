@@ -25,15 +25,15 @@ cd py_ext/
 python3 ./setup.py build
 sudo python3 ./setup.py install
 
-cd $HOME/tools
 echo "Installing pefile-extract-icon python class"
+cd $HOME/tools
 git clone https://github.com/ntnu-rgb/pefile-extract-icon.git
 cd pefile-extract-icon
 sudo pip3 install -r requirements.txt
 sudo python3 setup.py install
 
-cd $HOME/tools
 echo "Installing Unattended unipacker python module"
+cd $HOME/tools
 git clone https://github.com/ntnu-rgb/unattended-unipacker.git
 cd unattended-unipacker
 sudo python3 setup.py install
@@ -44,7 +44,14 @@ sudo systemctl disable clamav-freshclam
 sudo rm /var/lib/clamav/*
 sudo echo -e "rule pass\n{\n\tcondition:\n\t\tfalse\n}" | sudo tee /var/lib/clamav/pass.yar
 
+echo "Installing machoc"
+sudo apt-get install -y ruby
+sudo gem install metasm
+cd /usr/local/bin
+sudo wget https://raw.githubusercontent.com/ntnu-rgb/ruby-machoc_simplified/master/ruby-machoc_simplified.rb
+sudo chmod +x ruby-machoc_simplified.rb
 
+echo "Cloining git repo for divide and conquer"
 cd $HOME
 git clone git@github.com:57ur14/divide-and-conquer-poc.git
 cd divide-and-conquer-poc
