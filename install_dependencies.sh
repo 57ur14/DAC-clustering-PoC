@@ -1,7 +1,7 @@
 #!/bin/bash
 
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip unzip cmake python-dev gcc upx
+sudo apt-get install -y gcc cmake python3 python3-pip python-dev unzip upx clamav libclamunrar9
 sudo pip3 install filetype pyhash requests pillow pefile
 
 currentDir=$(pwd)
@@ -37,6 +37,13 @@ echo "Installing Unattended unipacker python module"
 git clone https://github.com/ntnu-rgb/unattended-unipacker.git
 cd unattended-unipacker
 sudo python3 setup.py install
+
+echo "Installing ClamAV"
+sudo service clamav-freshclam stop
+sudo systemctl disable clamav-freshclam
+sudo rm /var/lib/clamav/*
+sudo echo -e "rule pass\n{\n\tcondition:\n\t\tfalse\n}" | sudo tee /var/lib/clamav/pass.yar
+
 
 cd $HOME
 git clone git@github.com:57ur14/divide-and-conquer-poc.git
