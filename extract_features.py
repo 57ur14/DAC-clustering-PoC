@@ -108,7 +108,6 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
             fileinfo['tlsh'] = tlsh.hash(rawfile)       # imphash, and tlsh
 
         files[fileinfo['sha256']] = fileinfo            # Add to list of files
-
         return fileinfo['sha256']                       # Return the sha256sum of the pe file
     return None                                         # Return None if the file could not be opened
 

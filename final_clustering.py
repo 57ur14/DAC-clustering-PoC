@@ -14,6 +14,7 @@ CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
+FAST_TLSH_CLUSTERING = config.getboolean('clustering', 'fast_tlsh_clustering')
 
 files = {}                  # Dictionary of of files
 final_clusters = []         # List of clusters created by combining other clusters
@@ -36,7 +37,10 @@ stats = {
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
 
-tlsh_clusters = []          # List of tlsh clusters
+if FAST_TLSH_CLUSTERING == True:
+    tlsh_clusters = {}      # Dictionary of tlsh clusters, identified by tlsh hash of root file
+else:
+    tlsh_clusters = []      # List of tlsh clusters
 
 def create_final_clusters():
     """
@@ -77,10 +81,16 @@ def create_final_clusters():
                         cluster_set.add(sha256sum)
                         files[sha256sum]['final_cluster'] = fileinfo['final_cluster']
             if CLUSTER_WITH_TLSH == True and fileinfo['tlsh_cluster'] != None:
+                
                 for otherfile in tlsh_clusters[fileinfo['tlsh_cluster']]:
-                    if files[otherfile['sha256']]['final_cluster'] == None:
-                        cluster_set.add(otherfile['sha256'])
-                        files[otherfile['sha256']]['final_cluster'] = fileinfo['final_cluster']
+                    if FAST_TLSH_CLUSTERING == True:
+                        if files[otherfile]['final_cluster'] == None:
+                            cluster_set.add(otherfile)
+                            files[otherfile]['final_cluster'] = fileinfo['final_cluster']
+                    else:
+                        if files[otherfile['sha256']]['final_cluster'] == None:
+                            cluster_set.add(otherfile['sha256'])
+                            files[otherfile['sha256']]['final_cluster'] = fileinfo['final_cluster']
 
             # Add parent files to the cluster of the current file if the parent
             # is not already present in a cluster or alone in a cluster
@@ -216,10 +226,16 @@ def write_result_to_files():
                 outfile.write(file + "\n")
 
     with open('results/tlsh_cluster.txt' ,'w') as outfile:
-        for cluster in tlsh_clusters:
-            outfile.write("\n")
-            for fileinfo in cluster:
-                outfile.write(str(fileinfo) + "\n")
+        if FAST_TLSH_CLUSTERING:
+            for root_hash, cluster_files in tlsh_clusters.items():
+                outfile.write("\n" + root_hash + ":\n")
+                for sha256 in cluster_files:
+                    outfile.write(sha256 + "\n")
+        else:
+            for cluster in tlsh_clusters:
+                outfile.write("\n")
+                for fileinfo in cluster:
+                    outfile.write(str(fileinfo) + "\n")
     
     with open('results/nonparsable.txt', 'w') as outfile:
         for fileinfo in non_parsable_files.values():

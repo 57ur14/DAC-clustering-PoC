@@ -20,12 +20,16 @@ CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
+FAST_TLSH_CLUSTERING = config.getboolean('clustering', 'fast_tlsh_clustering')
 
 files = {}                  # Dictionary of of files
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
 resource_clusters = {}      # Dictionary of clusters where files have equal resources contained
-tlsh_clusters = []          # List of tlsh clusters
+if FAST_TLSH_CLUSTERING == True:
+    tlsh_clusters = {}      # Dictionary of tlsh clusters, identified by tlsh hash of root file
+else:
+    tlsh_clusters = []      # List of tlsh clusters
 
 def cluster_file(fileinfo):
     """
@@ -78,6 +82,9 @@ def cluster_on_contained_resources(fileinfo):
 def tlsh_cluster(fileinfo):
     """
     Cluster file based on TrendMicro Locally Sensitive Hash
+    """
+
+    """
     With a threshold of 100, binary files should be fairly similar
     Treshold of 100 results in approximately 6.43% FP rate and 94.5% detect rate:
     https://doi.org/10.1109/CTC.2013.9
@@ -86,31 +93,63 @@ def tlsh_cluster(fileinfo):
     best_score = threshold + 1
     best_cluster = None
     clusterIndex = None
-    for index, cluster in enumerate(tlsh_clusters):
-        for otherfile in cluster:
-            score = tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])
+
+    if FAST_TLSH_CLUSTERING == True:
+        """
+        Fast clustering involves only comparing to one "root node" in each clusters
+        The root node is the first file added to a new cluster.
+        When creating a new cluster, compare to files not present in any tlsh clusters.
+        This type of clustering likely leads to lower accuracy, but increased speed.
+        """
+        for root_value in tlsh_clusters.keys():
+            score = tlsh.diff(fileinfo['tlsh'], root_value)
             if score <= threshold and score < best_score:
                 best_score = score
-                best_cluster = cluster
-                clusterIndex = index
-    if best_cluster != None:            # If a suitable cluster was found
-        best_cluster.append({'sha256': fileinfo['sha256'], 'tlsh': fileinfo['tlsh']})
-        fileinfo['tlsh_cluster'] = clusterIndex
-    else:                               # If no cluster was found
-        # If no clusters contained similar files, create new cluster
-        tlsh_clusters.append([{'sha256': fileinfo['sha256'], 'tlsh': fileinfo['tlsh']}])
-        clusterIndex = len(tlsh_clusters) - 1   #  Store the index of the cluster
-        fileinfo['tlsh_cluster'] = clusterIndex
+                best_cluster = root_value
+        if best_cluster != None:
+            tlsh_clusters[best_cluster].add(fileinfo['sha256'])
+            fileinfo['tlsh_cluster'] = best_cluster
+        else:
+            tlsh_clusters[fileinfo['tlsh']] = set([fileinfo['sha256']])
+            fileinfo['tlsh_cluster'] = fileinfo['tlsh']
+            # TODO: Find effecient method for identifying files not in any tlsh cluster
+            # Add files not in any tlsh cluster if they belong
+            for otherfile in files.values():
+                if (otherfile['tlsh'] != None
+                        and otherfile['tlsh_cluster'] == None
+                        and fileinfo['sha256'] != otherfile['sha256']
+                        and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])):
+                    tlsh_clusters[fileinfo['tlsh']].add(otherfile['sha256'])
+    else:
+        """
+        Without fast clustering, each file is compared to all files in 
+        all clusters as well as files not in any cluster.
+        """
+        for index, cluster in enumerate(tlsh_clusters):
+            for otherfile in cluster:
+                score = tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])
+                if score <= threshold and score < best_score:
+                    best_score = score
+                    best_cluster = cluster
+                    clusterIndex = index
+        if best_cluster != None:            # If a suitable cluster was found
+            best_cluster.append({'sha256': fileinfo['sha256'], 'tlsh': fileinfo['tlsh']})
+            fileinfo['tlsh_cluster'] = clusterIndex
+        else:                               # If no cluster was found
+            # If no clusters contained similar files, create new cluster
+            tlsh_clusters.append([{'sha256': fileinfo['sha256'], 'tlsh': fileinfo['tlsh']}])
+            clusterIndex = len(tlsh_clusters) - 1   #  Store the index of the cluster
+            fileinfo['tlsh_cluster'] = clusterIndex
 
-        # Attempt to identify if other files not present in any 
-        # tlsh clusters should be clustered with the file
-        for otherfile in files.values():
-            if (otherfile['tlsh'] != None
-                    and otherfile['tlsh_cluster'] == None 
-                    and fileinfo['sha256'] != otherfile['sha256']
-                    and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh']) <= threshold):
-                tlsh_clusters[clusterIndex].append({'sha256': otherfile['sha256'], 'tlsh': otherfile['tlsh']})
-                otherfile['tlsh_cluster'] = clusterIndex
+            # Attempt to identify if other files not present in any 
+            # tlsh clusters should be clustered with the file
+            for otherfile in files.values():
+                if (otherfile['tlsh'] != None
+                        and otherfile['tlsh_cluster'] == None 
+                        and fileinfo['sha256'] != otherfile['sha256']
+                        and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh']) <= threshold):
+                    tlsh_clusters[clusterIndex].append({'sha256': otherfile['sha256'], 'tlsh': otherfile['tlsh']})
+                    otherfile['tlsh_cluster'] = clusterIndex
 
 # Read files from pickle
 with open('pickles/feature_extraction/files.pkl', 'rb') as picklefile:
