@@ -14,11 +14,14 @@ import os
 import shutil
 import subprocess
 import sys
+import configparser
 
 import peutils
 import requests
 
-unpack_directory = '/home/sturla/unpacked/'
+config = configparser.ConfigParser()
+config.read('config.ini')
+unpack_directory = config.get('clustering', 'unpacking_base_directory')
 static_unpack_directory = unpack_directory + 'static/'
 generic_unpack_directory = unpack_directory + 'generic/'
 

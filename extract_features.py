@@ -27,8 +27,7 @@ config.read('config.ini')
 DEBUG = config.getboolean('clustering', 'debug')
 DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
-
-base_directory = '/home/sturla/IJCNN_10000files/'
+base_directory = config.get('clustering', 'file_base_directory')
 
 files = {}                  # Dictionary of of files
 non_parsable_files = {}     # Dictionary of files that could not be parsed
