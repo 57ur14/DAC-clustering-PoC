@@ -42,6 +42,6 @@ cd $HOME
 git clone git@github.com:57ur14/divide-and-conquer-poc.git
 cd divide-and-conquer-poc
 cp example-config.ini config.ini
-echo "Edit config.ini to suit your "
+echo "Edit config.ini to suit your preferences"
 
 cd $currentDir
