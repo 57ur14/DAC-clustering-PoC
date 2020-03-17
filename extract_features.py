@@ -161,7 +161,7 @@ def load_historic_data():
     Sends all files to the "analyse_file" function that extracts features and clusters files.
     """
     
-    with open('/home/sturla/poc/files.txt', 'r') as trainfilesfile:
+    with open('/home/sturla/divide-and-conquer-poc/files.txt', 'r') as trainfilesfile:
         train = trainfilesfile.read().splitlines()
         
         num_files = len(train)
