@@ -13,7 +13,6 @@ PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
-CLUSTER_WITH_MACHOC = config.getboolean('clustering', 'cluster_with_machoc')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 
 files = {}                  # Dictionary of of files
@@ -37,7 +36,6 @@ stats = {
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
 
-machoc_clusters = []        # List of machoc clusters
 tlsh_clusters = []          # List of tlsh clusters
 
 def create_final_clusters():
@@ -78,11 +76,6 @@ def create_final_clusters():
                     if files[sha256sum]['final_cluster'] == None:
                         cluster_set.add(sha256sum)
                         files[sha256sum]['final_cluster'] = fileinfo['final_cluster']
-            if CLUSTER_WITH_MACHOC == True and fileinfo['machoc_cluster'] != None:
-                for otherfile in machoc_clusters[fileinfo['machoc_cluster']]:
-                    if files[otherfile['sha256']]['final_cluster'] == None:
-                        cluster_set.add(otherfile['sha256'])
-                        files[otherfile['sha256']]['final_cluster'] = fileinfo['final_cluster']
             if CLUSTER_WITH_TLSH == True and fileinfo['tlsh_cluster'] != None:
                 for otherfile in tlsh_clusters[fileinfo['tlsh_cluster']]:
                     if files[otherfile['sha256']]['final_cluster'] == None:
@@ -221,12 +214,6 @@ def write_result_to_files():
             outfile.write("\n" + imphash + "\n")
             for file in imphash_clusters[imphash]:
                 outfile.write(file + "\n")
-    
-    with open('results/machoc_cluster.txt', 'w') as outfile:
-        for cluster in machoc_clusters:
-            outfile.write("\n")
-            for fileinfo in cluster:
-                outfile.write(str(fileinfo) + "\n")
 
     with open('results/tlsh_cluster.txt' ,'w') as outfile:
         for cluster in tlsh_clusters:
@@ -269,8 +256,6 @@ with open('pickles/clustering/icon_clusters.pkl', 'rb') as picklefile:
     icon_clusters = pickle.load(picklefile)
 with open('pickles/clustering/resource_clusters.pkl', 'rb') as picklefile:
     resource_clusters = pickle.load(picklefile)
-with open('pickles/clustering/machoc_clusters.pkl', 'rb') as picklefile:
-    machoc_clusters = pickle.load(picklefile)
 with open('pickles/clustering/tlsh_clusters.pkl', 'rb') as picklefile:
     tlsh_clusters = pickle.load(picklefile)
 with open('pickles/feature_extraction/incoming_files.pkl', 'rb') as picklefile:

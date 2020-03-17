@@ -7,9 +7,6 @@
 # pyhash:                       pip3 install pyhash
 # tlsh:                         pip3 install tlsh
 # pefile-extract-icon:          https://github.com/ntnu-rgb/pefile-extract-icon
-# ruby-machoc_simplified.rb:    https://github.com/ntnu-rgb/ruby-machoc_simplified (the script must be added to PATH)
-# ruby:                         apt-get install ruby
-# metasm:                       gem install metasm
 
 import configparser
 import hashlib
@@ -30,7 +27,6 @@ config.read('config.ini')
 DEBUG = config.getboolean('clustering', 'debug')
 DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
-MACHOC_TIMEOUT = config.getint('clustering', 'machoc_timeout')
 
 xxhasher = pyhash.xx_64()
 base_directory = '/home/sturla/IJCNN_10000files/'
@@ -67,8 +63,6 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
             'icon_hash': None,
             'tlsh': None,
             'tlsh_cluster': None,
-            'machoc': None,
-            'machoc_cluster': None,
             'final_cluster': None
         }
         
@@ -111,8 +105,7 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
                 fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
         else:                                           # If file does not seem packed
             fileinfo['imphash'] = get_imphash(pe)       # Extract features suitable
-            fileinfo['machoc'] = get_machoc_hash(fullfilepath)  # for non-packed files such as
-            fileinfo['tlsh'] = tlsh.hash(rawfile)       # imphash, machoc hash and tlsh
+            fileinfo['tlsh'] = tlsh.hash(rawfile)       # imphash, and tlsh
 
         files[fileinfo['sha256']] = fileinfo            # Add to list of files
 
@@ -143,26 +136,6 @@ def get_imphash(pefile_pe):
         return None
     else:
         return imphash
-
-def get_machoc_hash(filepath):
-    """
-    Retrieve the machoc hash of an executable at a given filepath.
-    Please ensure that ruby-machoc_simplified.rb is located in a directory included in PATH
-    """
-    try:
-        metasm_process = subprocess.run(['ruby-machoc_simplified.rb', filepath], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=MACHOC_TIMEOUT, check=True)
-    except subprocess.TimeoutExpired:
-        return None                     # Timeout expired. Monitor frequency of this?
-    except subprocess.CalledProcessError:
-        return None
-    else:
-        machoc_hash = metasm_process.stdout.decode('utf-8')
-        # Remove ; and : from machoc hash
-        machoc_hash = machoc_hash.replace(';', '').replace(':', '')
-        if machoc_hash != '':
-            return machoc_hash
-        else:
-            return None
 
 def load_historic_data():
     """
