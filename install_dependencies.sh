@@ -29,7 +29,6 @@ cd $HOME/tools
 echo "Installing pefile-extract-icon python class"
 git clone https://github.com/ntnu-rgb/pefile-extract-icon.git
 cd pefile-extract-icon
-sudo pip3 install -r requirements.txt
 sudo python3 setup.py install
 
 cd $HOME/tools
