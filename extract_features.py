@@ -120,7 +120,7 @@ def get_icon_hash(pefile_pe):
     extract = extract_icon.ExtractIcon(pefile_pe=pefile_pe)
     raw = extract.get_raw_windows_preferred_icon()
     if raw != None:
-        return xxhash.xxh64(raw).digest()
+        return xxhash.xxh64_digest(raw)
     else:
         return None
 
