@@ -154,6 +154,22 @@ def detect_obfuscation(filepath, pefile_pe, pefile_warnings):
     """
     obfuscation = {'type': 'none'}
 
+    # Attempt to detect packing by section names
+    obfuscation = detect_obfuscation_by_section_names(pefile_pe)
+
+    if obfuscation['type'] == 'none':
+        # Use Detect It Easy to detect packer/protector etc. if it was not detected by section name
+        obfuscation = detect_obfuscation_by_diec(filepath)
+    if obfuscation['type'] == 'none':
+        # Check if file seems to be packed based on entropy and imports
+        obfuscation = detect_obfuscation_by_section_properties(pefile_pe, pefile_warnings)
+    return obfuscation
+
+def detect_obfuscation_by_section_names(pefile_pe):
+    """
+    Detect obfuscation by checking for section names that are
+    known to belong to packers or protectors.
+    """
     section_names = []
     for section in pefile_pe.sections:
         try:
@@ -163,35 +179,22 @@ def detect_obfuscation(filepath, pefile_pe, pefile_warnings):
     
     protector_intersection = protector_section_names.intersection(section_names)
     if protector_intersection:
-        obfuscation = {'type': 'protected', 'protector': protector_sections[protector_intersection.pop()]}
+        return {'type': 'protected', 'protector': protector_sections[protector_intersection.pop()]}
     packer_intersection = packer_section_names.intersection(section_names)
     if packer_intersection:
-        obfuscation = {'type': 'packed', 'packer': packer_sections[packer_intersection.pop()]}
+        return {'type': 'packed', 'packer': packer_sections[packer_intersection.pop()]}
+    return {'type': 'none'}
 
-    if obfuscation['type'] == 'none':       # Use Detect It Easy to detect packer / protector / linker etc. if it was not detected by section name
-        diec_output = get_diec_output(filepath)
-        if 'protector' in diec_output:      # If it is protected, overwrite "type".
-            obfuscation = {'type': 'protected', 'protector': diec_output['protector']}
-        elif 'packer' in diec_output:
-            obfuscation = {'type': 'packed', 'packer': diec_output['packer']}
-        else:
-            # Check if file seems to be packed based on entropy and number of imports 
-            # (DIE might not detect all packers)
-            # TODO: Investigate peutils -> is_probably_packed(pe) (function)
-
-            # pefile gives warning if the following condition is true:
-            # if suspicious_imports_count == len(suspicious_imports) and total_symbols < 20
-            # where suspicious_imports are "LoadLibrary" and "GetProcAddress"
-            
-            much_high_entropy_data = peutils.is_probably_packed(pefile_pe)
-
-            for section_warning in pefile_warnings:
-                if ((section_warning == 'Imported symbols contain entries typical of packed executables.')
-                        or ('Both IMAGE_SCN_MEM_WRITE and IMAGE_SCN_MEM_EXECUTE are set. This might indicate a packed executable.' in section_warning
-                        and much_high_entropy_data)):
-                    obfuscation = {'type': 'unknown'}   # Highly likely that it is packed
-                    break
-    return obfuscation
+def detect_obfuscation_by_diec(filepath):
+    """
+    Detect obfuscaton with DetectItEasy
+    """
+    diec_output = get_diec_output(filepath)
+    if 'protector' in diec_output:      # If it is protected, overwrite "type".
+        return {'type': 'protected', 'protector': diec_output['protector']}
+    elif 'packer' in diec_output:
+        return {'type': 'packed', 'packer': diec_output['packer']}
+    return {'type': 'none'}
 
 def get_diec_output(filepath):
     """
@@ -234,6 +237,22 @@ def get_diec_output(filepath):
             elif line[0:12] == 'PE: joiner: ':
                 info['joiner'] = line[12:]
     return info
+
+def detect_obfuscation_by_section_properties(pefile_pe, pe_warnings):
+    """
+    Detect obfuscation through properties of sections.
+
+    # pefile gives warning if the following condition is true:
+    # if suspicious_imports_count == len(suspicious_imports) and total_symbols < 20
+    # where suspicious_imports are "LoadLibrary" and "GetProcAddress"
+    """
+    much_high_entropy_data = peutils.is_probably_packed(pefile_pe)
+    for section_warning in pe_warnings:
+        if ((section_warning == 'Imported symbols contain entries typical of packed executables.')
+                or ('Both IMAGE_SCN_MEM_WRITE and IMAGE_SCN_MEM_EXECUTE are set. This might indicate a packed executable.' in section_warning
+                and much_high_entropy_data)):   # Likely that it is packed if high entropy
+            return {'type': 'unknown'}          # data and a section is both writable and
+    return None                                 # executable or only few specific imports.
 
 def unpack_file(filepath, fileinfo, pefile_pe):
     """
@@ -303,19 +322,6 @@ def unipack(filepath):
         return []               # unipacker crashed, skip file
     else:
         return [rename_to_sha256(generic_unpack_directory + 'unpacked_' + os.path.basename(filepath))[0]]
-
-def arancino_unpack(filepath):
-    """
-    url = 'http://henriette.rgb.moe/unpack.php'
-    with open(filepath, 'rb') as f:
-        r = requests.post(url, files={'upload': f})
-        print(r)
-        raise SystemExit
-        return r.text
-    print("Generic unpacking is WIP")
-    return None
-    """
-    return None # TODO: Skipping unpacking since no generic unpacking seems to be successful as of now
 
 def rename_to_sha256(filepath):
     """
@@ -393,7 +399,6 @@ def clam_unpack(filepath):
             timeout=5
         )
     except subprocess.TimeoutExpired:
-        print('Timeout reached for ClamAV')
         return unpacked             # Timeout reached, return empty list
     except subprocess.CalledProcessError:
         return unpacked             # clamscan crashed, return empty list

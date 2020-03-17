@@ -183,9 +183,12 @@ def create_final_clusters():
 
     stats['number_of_incoming_pe'] = len(incoming_files)
     stats['unpacked_pe_files'] = stats['total_pe_files'] - stats['number_of_incoming_pe']
-    stats['mean_cluster_size'] = stats['total_clustered_files'] / stats['number_of_good_clusters']
-    stats['share_successful'] = stats['successfully_clustered_incoming'] / stats['number_of_incoming_pe']
-    stats['mean_purity'] = mean_purity / num_real_clusters
+    if stats['number_of_good_clusters'] != 0:
+        stats['mean_cluster_size'] = stats['total_clustered_files'] / stats['number_of_good_clusters']
+    if stats['number_of_incoming_pe'] != 0:
+        stats['share_successful'] = stats['successfully_clustered_incoming'] / stats['number_of_incoming_pe']
+    if num_real_clusters != 0:
+        stats['mean_purity'] = mean_purity / num_real_clusters
     stats['total_pure_clusters'] = num_pure_clusters
     stats['total_clusters'] = num_real_clusters
 

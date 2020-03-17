@@ -77,7 +77,7 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
 
         # Use previously gathered information if a file with equal sha256sum already has been analysed
         if fileinfo['sha256'] in files.keys():
-            files[fileinfo['sha256']]['unpacks_from'].add(fileinfo['sha256'])
+            files[fileinfo['sha256']]['unpacks_from'].update(unpacks_from)
             return fileinfo['sha256']
 
         try:
@@ -110,13 +110,9 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
                 # simply add a hash of the unpacked file to "contained resources"
                 fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
         else:                                           # If file does not seem packed
-            fileinfo['imphash'] = pe.get_imphash()      # Extract features suitable
-            if fileinfo['imphash'] == '':               # for non-packed files such as
-                fileinfo['imphash'] = None              # imphash, machoc hash and tlsh
-            fileinfo['machoc'] = get_machoc_hash(fullfilepath)
-            if fileinfo['machoc'] == '':
-                fileinfo['machoc'] = None
-            fileinfo['tlsh'] = tlsh.hash(rawfile)
+            fileinfo['imphash'] = get_imphash(pe)       # Extract features suitable
+            fileinfo['machoc'] = get_machoc_hash(fullfilepath)  # for non-packed files such as
+            fileinfo['tlsh'] = tlsh.hash(rawfile)       # imphash, machoc hash and tlsh
 
         files[fileinfo['sha256']] = fileinfo            # Add to list of files
 
@@ -136,6 +132,17 @@ def get_icon_hash(pefile_pe):
         return xxhasher(raw)
     else:
         return None
+
+def get_imphash(pefile_pe):
+    """
+    Retrieve the imphash of a PE file.
+    Returns None if imphash could not be extracted.
+    """
+    imphash = pefile_pe.get_imphash()
+    if imphash == '':
+        return None
+    else:
+        return imphash
 
 def get_machoc_hash(filepath):
     """
