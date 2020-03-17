@@ -1,7 +1,7 @@
 #!/bin/bash
 
 sudo apt-get update
-sudo apt-get install -y python3 python3-pip unzip cmake python-dev gcc
+sudo apt-get install -y python3 python3-pip unzip cmake python-dev gcc upx
 sudo pip3 install filetype pyhash requests pillow pefile
 
 currentDir=$(pwd)
