@@ -252,7 +252,7 @@ def detect_obfuscation_by_section_properties(pefile_pe, pe_warnings):
                 or ('Both IMAGE_SCN_MEM_WRITE and IMAGE_SCN_MEM_EXECUTE are set. This might indicate a packed executable.' in section_warning
                 and much_high_entropy_data)):   # Likely that it is packed if high entropy
             return {'type': 'unknown'}          # data and a section is both writable and
-    return None                                 # executable or only few specific imports.
+    return {'type': 'none'}                     # executable or only few specific imports.
 
 def unpack_file(filepath, fileinfo, pefile_pe):
     """
