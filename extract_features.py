@@ -4,8 +4,8 @@
 # External dependencies:
 # filetype:                     pip3 install filetype
 # pefile:                       pip3 install pefile
-# pyhash:                       pip3 install pyhash
-# tlsh:                         pip3 install tlsh
+# xxhash:                       pip3 install xxhash
+# tlsh:                         https://github.com/trendmicro/tlsh
 # pefile-extract-icon:          https://github.com/ntnu-rgb/pefile-extract-icon
 
 import configparser
@@ -16,7 +16,7 @@ import subprocess
 
 import filetype
 import pefile
-import pyhash
+import xxhash
 import tlsh
 
 import extract_icon
@@ -28,7 +28,6 @@ DEBUG = config.getboolean('clustering', 'debug')
 DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 
-xxhasher = pyhash.xx_64()
 base_directory = '/home/sturla/IJCNN_10000files/'
 
 files = {}                  # Dictionary of of files
@@ -121,7 +120,7 @@ def get_icon_hash(pefile_pe):
     extract = extract_icon.ExtractIcon(pefile_pe=pefile_pe)
     raw = extract.get_raw_windows_preferred_icon()
     if raw != None:
-        return xxhasher(raw)
+        return xxhash.xxh64(raw).digest()
     else:
         return None
 

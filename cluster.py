@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 # External dependencies:
-# textdistance:             pip3 install textdistance
 # tlsh:                     pip3 install tlsh
 
 
@@ -10,7 +9,6 @@ import configparser
 import os
 import pickle
 
-import textdistance
 import tlsh
 
 config = configparser.ConfigParser()
