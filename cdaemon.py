@@ -8,10 +8,14 @@ import configparser
 import os
 import pickle
 import queue
+import signal
+import sqlite3
+from collections import Counter
 from multiprocessing.managers import BaseManager
 
 import tlsh
 
+# Retreive configuration
 config = configparser.ConfigParser()
 config.read('config.ini')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
@@ -19,84 +23,176 @@ CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
-FAST_TLSH_CLUSTERING = config.getboolean('clustering', 'fast_tlsh_clustering')
+DATABASE_PATH = config.get('database', 'path')
 QUEUE_MANAGER_IP = config.get('queue_manager', 'ip')
 QUEUE_MANAGER_PORT = config.getint('queue_manager', 'port')
-QUEUE_MANAGER_KEY = config.getint('queue_manager', 'key')
+QUEUE_MANAGER_KEY = config.get('queue_manager', 'key').encode('utf-8')
 
+# Open SQLite database
+sqlite_conn = sqlite3.connect(DATABASE_PATH)
+
+# Connect to queue
 class QueueManager(BaseManager):
     pass
-
-
 QueueManager.register('get_queue')
 manager = QueueManager(address=(QUEUE_MANAGER_IP, QUEUE_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
-manager.connect()
+try:
+    manager.connect()
+except:
+    print("Cannot connect to queue manager. Please check the configuration.")
+    raise SystemExit
 queue = manager.get_queue()
 
+# Decalare global variables
 files = {}                  # Dictionary of of files
 imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
 icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
 resource_clusters = {}      # Dictionary of clusters where files have equal resources contained
-
-if FAST_TLSH_CLUSTERING == True:
-    tlsh_clusters = {}      # Dictionary of tlsh clusters, identified by tlsh hash of root file
-else:
-    tlsh_clusters = []      # List of tlsh clusters
+tlsh_clusters = {}          # Dictionary of tlsh clusters, identified by tlsh hash of root file
+union_clusters = []         # List of clusters where files have been joined
 
 def cluster_file(fileinfo):
     """
     Cluster the incoming file into existing clusters or create new clusters
     TODO: Investigate if multiple families commonly share icon (they probably do)
     """
+    union_cluster_index = None
 
-    if CLUSTER_WITH_ICON == True and fileinfo['icon_hash'] != None:         # Cluster using a hash of the icon - fast and should be 
-        icon_cluster(fileinfo)                          # suitable for both packed and non-packed samples (but slightly unaccurate)
+    # TODO: Add checks if file already has been added to union cluster?
+    # Is this possible? Don't know; Should check
 
-    if CLUSTER_WITH_RESOURCES == True and len(fileinfo['contained_resources']) != 0:
-        cluster_on_contained_resources(fileinfo)
+    if (len(fileinfo['contained_pe_files']) != 0
+            and cluster_on_contained_pe(fileinfo) is not None):
+        # If file contained another file and it 
+        # could be clustered based on child,
+        # cluster based on child and quit.
+        return
 
-    if fileinfo['obfuscation']['type'] == 'none':       # Cluster using basic features of the files if it is not packed
-        if CLUSTER_WITH_IMPHASH == True and fileinfo['imphash'] != None:    # Cluster using imphash if imphash is present (fast)
-            imphash_cluster(fileinfo)
-        elif CLUSTER_WITH_TLSH == True:                 # Cluster using tlsh if no other suitable option
-            tlsh_cluster(fileinfo)                      # TLSH should always be present (slow but fairly accurate)
-
-    # TODO Add to union cluster
-    # Priority if not obfuscated:
-    # 1. imphash
-    # 2. Resources
-    # 3. TLSH
-    # 4. Icon
-    # Priority if obfuscated:
-    # 1. Contained resources
-    # 2. Parent file
-    # 3. Icon
-
-def icon_cluster(fileinfo):
-    if fileinfo['icon_hash'] in icon_clusters:
-        icon_clusters[fileinfo['icon_hash']].append(fileinfo['sha256'])
+    if (fileinfo['obfuscation']['type'] == 'none' 
+            and fileinfo['imphash'] is not None
+            and CLUSTER_WITH_IMPHASH == True):
+        # Cluster using imphash if imphash is present 
+        # and it is not obfuscated (fast)
+        union_cluster_index = imphash_cluster(fileinfo)
+    if (union_cluster_index is None
+            and len(fileinfo['contained_resources']) != 0
+            and CLUSTER_WITH_RESOURCES == True):
+        # Cluster using contained resources if the
+        # files contains any resources
+        union_cluster_index = cluster_on_contained_resources(fileinfo)
+    if (union_cluster_index is None
+            and fileinfo['icon_hash'] is not None
+            and CLUSTER_WITH_ICON == True):
+        # Cluster using a hash of the icon - fast and should be 
+        # suitable for both packed and non-packed samples 
+        # (but slightly unaccurate)
+        union_cluster_index = icon_cluster(fileinfo)
+    
+    if union_cluster_index is not None:
+        # Add to cluster if suitable cluster was identified by 
+        # the fast methods 
+        union_clusters[union_cluster_index].add(fileinfo['sha256'])
+        fileinfo['union_cluster'] = union_cluster_index
+    elif (fileinfo['obfuscation']['type'] == 'none'  
+            and CLUSTER_WITH_TLSH == True):
+        # Cluster with TLSH if other features were not suitable, but TLSH is
+        # Last resort
+        tlsh_cluster(fileinfo)
     else:
-        icon_clusters[fileinfo['icon_hash']] = [fileinfo['sha256']]
+        # If no suitable cluster was found, create new union cluster
+        union_cluster_index = len(union_clusters)
+        union_clusters.append(set([fileinfo['sha256']]))
+        fileinfo['union_cluster'] = union_cluster_index
+    
 
 def imphash_cluster(fileinfo):
+    """
+    Attempt to cluster file based on imphash.
+    Return the index of the union cluster the file should be placed into
+    or None if the file does not fit in any union cluster.
+    """
     if fileinfo['imphash'] in imphash_clusters:
-        imphash_clusters[fileinfo['imphash']].append(fileinfo['sha256'])
+        # Add to existing cluster if possible
+        imphash_clusters[fileinfo['imphash']].add(fileinfo['sha256'])
+        # Add to the same union cluster as the first file in the imphash cluster
+        for sha256 in imphash_clusters[fileinfo['imphash']]:
+            # Retrieve first item in set
+            return files[sha256]['union_cluster']
     else:
-        imphash_clusters[fileinfo['imphash']] = [fileinfo['sha256']]
+        # Create new imphash cluster and union cluster if no matching cluster was found
+        imphash_clusters[fileinfo['imphash']] = set([fileinfo['sha256']])
+        return None
+
+
+def icon_cluster(fileinfo):
+    """
+    Attempt to cluster file based on icon hash.
+    Return the index of the union cluster the file should be placed into
+    or None if the file does not fit in any union cluster.
+    """
+    if fileinfo['icon_hash'] in icon_clusters:
+        icon_clusters[fileinfo['icon_hash']].add(fileinfo['sha256'])
+        for sha256 in icon_clusters[fileinfo['icon_hash']]:
+            # Retrieve first item in set
+            return files[sha256]['union_cluster']
+    else:
+        icon_clusters[fileinfo['icon_hash']] = set([fileinfo['sha256']])
+        return None
 
 def cluster_on_contained_resources(fileinfo):
-    for resource in fileinfo['contained_resources']:
-        if resource in resource_clusters.keys():
-            resource_clusters[resource].add(fileinfo['sha256'])
+    """
+    Add to clusters for all contained resources.
+    Return the index of the  most commonly shared union cluster 
+    or None if the file does not fit in any union cluster.
+    """
+    union_cluster_of_files = []     # Store all suitable union clusters
+    for resource_hash in fileinfo['contained_resources']:
+        if resource_hash in resource_clusters.keys():
+            resource_clusters[resource_hash].add(fileinfo['sha256'])
+            for otherfile in resource_clusters[resource_hash]:
+                union_cluster_of_files.append(files[otherfile]['union_cluster'])
         else:
-            resource_clusters[resource] = set([fileinfo['sha256']])
+            resource_clusters[resource_hash] = set([fileinfo['sha256']])
+
+    if len(union_cluster_of_files) != 0:
+        # Find the most common union cluster among
+        # the files in shared resource clusters
+        return Counter(union_cluster_of_files).most_common(1)[0][0]
+    else:
+        return None
+
+def cluster_on_contained_pe(fileinfo):
+    """
+    Attempt to add file to any cluster that a contained PE file is in.
+    This is possible since unpacked files are sent to clustering before parent.
+    """
+    for sha256 in fileinfo['contained_pe_files']:
+        if files[sha256]['union_cluster'] is not None:
+            fileinfo['union_cluster'] = files[sha256]['union_cluster']
+            union_clusters[fileinfo['union_cluster']].add(fileinfo['sha256'])
+            break
+    
+    # If parent (this) file was added to union cluster
+    if fileinfo['union_cluster'] is not None:
+        for sha256 in fileinfo['contained_pe_files']:
+            # and child (unpacked PE) is not in any union cluster
+            if files[sha256]['union_cluster'] is None:
+                # Then add to union cluster of parent
+                files[sha256]['union_cluster'] = fileinfo['union_cluster']
+    return fileinfo['union_cluster']
 
 def tlsh_cluster(fileinfo):
     """
     Cluster file based on TrendMicro Locally Sensitive Hash
-    """
+    Also add to union cluster if a suitable cluster is found
+    or a new union cluster if no suitable cluster is found.
 
-    """
+    This clustering involves only comparing to one "root node" in each clusters
+    The root node is the first file added to a new cluster.
+    When creating a new cluster, compare to files not present in any tlsh clusters.
+    This type of clustering likely leads to lower accuracy, but increased speed.
+
+    When comparing two TLSH hashes, a distance score is calculated.
     With a threshold of 100, binary files should be fairly similar
     Treshold of 100 results in approximately 6.43% FP rate and 94.5% detect rate:
     https://doi.org/10.1109/CTC.2013.9
@@ -104,85 +200,124 @@ def tlsh_cluster(fileinfo):
     threshold  = 100
     best_score = threshold + 1
     best_cluster = None
-    clusterIndex = None
 
-    if FAST_TLSH_CLUSTERING == True:
-        """
-        Fast clustering involves only comparing to one "root node" in each clusters
-        The root node is the first file added to a new cluster.
-        When creating a new cluster, compare to files not present in any tlsh clusters.
-        This type of clustering likely leads to lower accuracy, but increased speed.
-        """
-        for root_value in tlsh_clusters.keys():
-            score = tlsh.diff(fileinfo['tlsh'], root_value)
-            if score <= threshold and score < best_score:
-                best_score = score
-                best_cluster = root_value
-        if best_cluster != None:
-            tlsh_clusters[best_cluster].add(fileinfo['sha256'])
-            fileinfo['tlsh_cluster'] = best_cluster
-        else:
-            tlsh_clusters[fileinfo['tlsh']] = set([fileinfo['sha256']])
-            fileinfo['tlsh_cluster'] = fileinfo['tlsh']
-            # TODO: Find effecient method for identifying files not in any tlsh cluster
-            # Add files not in any tlsh cluster if they belong
-            for otherfile in files.values():
-                if (otherfile['tlsh'] != None
-                        and otherfile['tlsh_cluster'] == None
-                        and fileinfo['sha256'] != otherfile['sha256']
-                        and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])):
-                    tlsh_clusters[fileinfo['tlsh']].add(otherfile['sha256'])
+    for root_value in tlsh_clusters.keys():
+        score = tlsh.diff(fileinfo['tlsh'], root_value)
+        if score <= threshold and score < best_score:
+            best_score = score
+            best_cluster = root_value
+    if best_cluster is not None:
+        # If match was found, add to cluster and union cluster 
+        # of first file in the tlsh cluster.
+        for sha256 in tlsh_clusters[best_cluster]:
+            fileinfo['union_cluster'] = files[sha256]['union_cluster']
+            break
+        union_clusters[fileinfo['union_cluster']].add(fileinfo['sha256'])
+        # Must add to tlsh cluster after iterating over
+        # dictionary to avoid retrieving itself.
+        tlsh_clusters[best_cluster].add(fileinfo['sha256'])
+        fileinfo['tlsh_cluster'] = best_cluster
     else:
-        """
-        Without fast clustering, each file is compared to all files in 
-        all clusters as well as files not in any cluster.
-        """
-        for index, cluster in enumerate(tlsh_clusters):
-            for otherfile in cluster:
-                score = tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])
-                if score <= threshold and score < best_score:
-                    best_score = score
-                    best_cluster = cluster
-                    clusterIndex = index
-        if best_cluster != None:            # If a suitable cluster was found
-            best_cluster.append({'sha256': fileinfo['sha256'], 'tlsh': fileinfo['tlsh']})
-            fileinfo['tlsh_cluster'] = clusterIndex
-        else:                               # If no cluster was found
-            # If no clusters contained similar files, create new cluster
-            tlsh_clusters.append([{'sha256': fileinfo['sha256'], 'tlsh': fileinfo['tlsh']}])
-            clusterIndex = len(tlsh_clusters) - 1   #  Store the index of the cluster
-            fileinfo['tlsh_cluster'] = clusterIndex
+        # Create new tlsh cluster if no suitable cluster was found
+        tlsh_clusters[fileinfo['tlsh']] = set([fileinfo['sha256']])
+        fileinfo['tlsh_cluster'] = fileinfo['tlsh']
+        # Also create new union cluster
+        fileinfo['union_cluster'] = len(union_clusters)
+        union_clusters.append(set([fileinfo['sha256']]))
+        
+        for otherfile in files.values():
+            # For all files not in any tlsh cluster
+            # TODO: Kan tlsh være blank?
+            if (otherfile['tlsh'] is not None
+                    and otherfile['tlsh_cluster'] is None
+                    and fileinfo['sha256'] != otherfile['sha256']
+                    and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])):
+                # Add to this new tlsh cluster if they match
+                tlsh_clusters[fileinfo['tlsh']].add(otherfile['sha256'])
+                otherfile['tlsh_cluster'] = fileinfo['tlsh_cluster']
+                # And also add to this new union cluster
+                otherfile['union_cluster'] = fileinfo['union_cluster']
+                union_clusters[fileinfo['union_cluster']].add(otherfile['sha256'])
 
-            # Attempt to identify if other files not present in any 
-            # tlsh clusters should be clustered with the file
-            for otherfile in files.values():
-                if (otherfile['tlsh'] != None
-                        and otherfile['tlsh_cluster'] == None 
-                        and fileinfo['sha256'] != otherfile['sha256']
-                        and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh']) <= threshold):
-                    tlsh_clusters[clusterIndex].append({'sha256': otherfile['sha256'], 'tlsh': otherfile['tlsh']})
-                    otherfile['tlsh_cluster'] = clusterIndex
+def load_from_pickles():
+    global files
+    global imphash_clusters
+    global icon_clusters
+    global resource_clusters
+    global tlsh_clusters
+    global union_clusters
 
-# TODO: Load any previous progress from database?
+    if os.path.exists('pickles/'):
+        with open('pickles/files.pkl', 'rb') as picklefile:
+            files = pickle.load(picklefile)
+        with open('pickles/imphash_clusters.pkl', 'rb') as picklefile:
+            imphash_clusters = pickle.load(picklefile)
+        with open('pickles/icon_clusters.pkl', 'rb') as picklefile:
+            icon_clusters = pickle.load(picklefile)
+        with open('pickles/resource_clusters.pkl', 'rb') as picklefile:
+            resource_clusters = pickle.load(picklefile)
+        with open('pickles/tlsh_clusters.pkl', 'rb') as picklefile:
+            tlsh_clusters = pickle.load(picklefile)
+        with open('pickles/union_clusters.pkl', 'rb') as picklefile:
+            union_clusters = pickle.load(picklefile)
 
-while True:
-    item_to_process = queue.get()
-    # TODO: Process
-    # TODO: Update database?
+def save_to_pickles():
+    try:
+        os.mkdir('pickles')
+    except FileExistsError:
+        pass
 
-try:
-    os.mkdir('pickles/clustering')
-except FileExistsError:
-    pass
+    # Write results to pickles to allow further processing
+    with open('pickles/files.pkl', 'wb') as picklefile:
+        pickle.dump(files, picklefile)
+    with open('pickles/imphash_clusters.pkl', 'wb') as picklefile:
+        pickle.dump(imphash_clusters, picklefile)
+    with open('pickles/icon_clusters.pkl', 'wb') as picklefile:
+        pickle.dump(icon_clusters, picklefile)
+    with open('pickles/tlsh_clusters.pkl', 'wb') as picklefile:
+        pickle.dump(tlsh_clusters, picklefile)
+    with open('pickles/resource_clusters.pkl', 'wb') as picklefile:
+        pickle.dump(resource_clusters, picklefile)
+    with open('pickles/union_clusters.pkl', 'wb') as picklefile:
+        pickle.dump(union_clusters, picklefile)
 
-# Write results to pickles to allow further processing
-with open('pickles/clustering/files.pkl', 'wb') as picklefile:
-    pickle.dump(files, picklefile)
-with open('pickles/clustering/imphash_clusters.pkl', 'wb') as picklefile:
-    pickle.dump(imphash_clusters, picklefile)
-with open('pickles/clustering/icon_clusters.pkl', 'wb') as picklefile:
-    pickle.dump(icon_clusters, picklefile)
-with open('pickles/clustering/tlsh_clusters.pkl', 'wb') as picklefile:
-    pickle.dump(tlsh_clusters, picklefile)
-with open('pickles/clustering/resource_clusters.pkl', 'wb') as picklefile:
-    pickle.dump(resource_clusters, picklefile)
+def sigint_handler(signum, frame):
+    """
+    Do not quit immediately if recieving SIGINT.
+    In stead, modify "continue_working" such that the script 
+    will stop attempting to retrieve new items from the queue
+    and rather save variables to pickles.
+    """
+    print("SIGINT recieved. Quitting and saving state after processing the current file.")
+    global continue_working
+    continue_working = False
+
+# Create SIGINT handler
+signal.signal(signal.SIGINT, sigint_handler)
+
+# Start working on elements in queue
+continue_working = True
+while continue_working == True:
+    try:
+        file_to_cluster = queue.get()
+    except EOFError:
+        print("Queue not available. Please check if the queue manager is still running.")
+        break
+    else:
+        print("Clustering file " + file_to_cluster['sha256'])
+        if file_to_cluster['sha256'] in files.keys():
+            # Skip if file already has been clustered.
+            # TODO: Or update with new values such as 
+            # unpacks_from and unpacks_to? But be careful,
+            # values related to clustering must not not be imported
+            continue
+        files[file_to_cluster['sha256']] = file_to_cluster
+        cluster_file(file_to_cluster)   
+        # TODO: Write to database?
+        #sqlite_conn.commit()   # Commit changes
+
+# Save results to pickles when done working
+save_to_pickles()
+
+# TODO: Remove?
+sqlite_conn.close()
