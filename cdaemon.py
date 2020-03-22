@@ -23,6 +23,7 @@ CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
+CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_packed_files')
 DATABASE_PATH = config.get('database', 'path')
 QUEUE_MANAGER_IP = config.get('queue_manager', 'ip')
 QUEUE_MANAGER_PORT = config.getint('queue_manager', 'port')
@@ -68,7 +69,7 @@ def cluster_file(fileinfo):
         # cluster based on child and quit.
         return
 
-    if (fileinfo['obfuscation']['type'] == 'none' 
+    if ((CLUSTER_PACKED_FILES == True or fileinfo['obfuscation']['type'] == 'none')
             and fileinfo['imphash'] is not None
             and CLUSTER_WITH_IMPHASH == True):
         # Cluster using imphash if imphash is present 
@@ -93,7 +94,7 @@ def cluster_file(fileinfo):
         # the fast methods 
         union_clusters[union_cluster_index].add(fileinfo['sha256'])
         fileinfo['union_cluster'] = union_cluster_index
-    elif (fileinfo['obfuscation']['type'] == 'none'  
+    elif ((CLUSTER_PACKED_FILES == True or fileinfo['obfuscation']['type'] == 'none')
             and CLUSTER_WITH_TLSH == True):
         # Cluster with TLSH if other features were not suitable, but TLSH is
         # Last resort
