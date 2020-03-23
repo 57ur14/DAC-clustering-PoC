@@ -303,15 +303,20 @@ while continue_working == True:
         print("Queue not available. Please check if the queue manager is still running.")
         break
     else:
-        print("Clustering file " + file_to_cluster['sha256'])
         if file_to_cluster['sha256'] in files.keys():
-            # Skip if file already has been clustered.
-            # TODO: Or update with new values such as 
-            # unpacks_from and unpacks_to? But be careful,
-            # values related to clustering must not not be imported
-            continue
-        files[file_to_cluster['sha256']] = file_to_cluster
-        cluster_file(file_to_cluster)   
+            print("Merging file with existing information  " + file_to_cluster['sha256'])
+            # If file has been received and clustered before
+            # Merge new data into the existing data.
+            if file_to_cluster['incoming']:
+                files[file_to_cluster['sha256']]['incoming'] = True
+            else:       # If file is not incoming (was unpacked from another file)
+                if files[file_to_cluster['sha256']]['incoming']:
+                    files[file_to_cluster['sha256']]['incoming'] = True
+                files[file_to_cluster['sha256']]['unpacks_from'].update(file_to_cluster['unpacks_from'])
+        else:
+            print("Clustering file " + file_to_cluster['sha256'])
+            files[file_to_cluster['sha256']] = file_to_cluster
+            cluster_file(file_to_cluster)   
         # TODO: Write to database?
         #sqlite_conn.commit()   # Commit changes
 

@@ -77,7 +77,7 @@ def main():
         print("At least one of the following combinations must be supplied: (-P <path> [-F <family>]) | -L <path to list> | -C <path to combined-list>")
         parser.print_help()
 
-def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
+def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, unpack_chain=None):
     """
     Analyse a pe-file at the given filepath, add to list of files and return sha256sum
     Can also specify the family the pe belongs to (if known) and the 
@@ -114,9 +114,17 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
         }
 
         # Skip if an unpacking tool returned an identical file
-        if incoming == False and fileinfo['sha256'] in unpacks_from:
-            return None
-        
+        if incoming == False:
+            if fileinfo['sha256'] in unpack_chain:
+                # Abort if this the unpacking is looping
+                return None
+            else:
+                if unpack_chain is None:
+                    # If first file in unpacking chain
+                    # Create new unpacking chain with checksum of parent
+                    unpack_chain = unpacks_from.copy()
+                # Add checksum of this file to unpacking chain
+                unpack_chain.add(fileinfo['sha256'])
         try:
             pe = pefile.PE(data=rawfile)
         except Exception:
