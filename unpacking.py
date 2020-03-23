@@ -323,8 +323,13 @@ def unipack(filepath):
         return []               # Timeout reached, skip file
     except subprocess.CalledProcessError:
         return []               # unipacker crashed, skip file
-    else:
-        return [rename_to_sha256(generic_unpack_directory + 'unpacked_' + os.path.basename(filepath))[0]]
+    else: # If Unipacker returned successfully
+        newfilepath = generic_unpack_directory + 'unpacked_' + os.path.basename(filepath)
+        if os.path.exists(newfilepath):
+            # Return path to new file if it was unpacked
+            return [rename_to_sha256(newfilepath)[0]]
+        else:
+            return []           # Skip file if unpacked file did not exist
 
 def rename_to_sha256(filepath):
     """
