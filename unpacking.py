@@ -146,10 +146,16 @@ unipack_supported_packers = [
     'yzpack'
 ]
 
-try:
-    os.mkdir(tmpdir)       # Create a new temporary directory
-except FileExistsError:
-    pass
+def_make_directory_if_not_exists()
+
+# Create necessary directories if they do not exist
+if not os.path.exists(tmpdir):
+    os.makedirs(tmpdir)
+if not os.path.exists(generic_unpack_directory):
+    os.makedirs(generic_unpack_directory)
+if not os.path.exists(static_unpack_directory):
+    os.makedirs(static_unpack_directory)
+
 
 def detect_obfuscation(filepath, pefile_pe, pefile_warnings):
     """
