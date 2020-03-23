@@ -31,7 +31,7 @@ QUEUE_MANAGER_PORT = config.getint('queue_manager', 'port')
 QUEUE_MANAGER_KEY = config.get('queue_manager', 'key').encode('utf-8')
 
 # Open SQLite database
-sqlite_conn = sqlite3.connect(DATABASE_PATH)
+#sqlite_conn = sqlite3.connect(DATABASE_PATH)
 
 # Connect to queue
 class QueueManager(BaseManager):
@@ -319,4 +319,4 @@ while continue_working == True:
 save_to_pickles()
 
 # TODO: Remove?
-sqlite_conn.close()
+#sqlite_conn.close()
