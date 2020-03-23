@@ -31,7 +31,7 @@ PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 QUEUE_MANAGER_IP = config.get('queue_manager', 'ip')
 QUEUE_MANAGER_PORT = config.getint('queue_manager', 'port')
 QUEUE_MANAGER_KEY = config.get('queue_manager', 'key').encode('utf-8')
-CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_packed_files')
+CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
 
 # Connect to queue
 class QueueManager(BaseManager):
