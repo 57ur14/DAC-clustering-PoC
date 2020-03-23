@@ -23,6 +23,7 @@ CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
+TLSH_THRESHOLD = config.getint('clustering', 'tlsh_threshold')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_packed_files')
 DATABASE_PATH = config.get('database', 'path')
 QUEUE_MANAGER_IP = config.get('queue_manager', 'ip')
@@ -194,11 +195,8 @@ def tlsh_cluster(fileinfo):
     This type of clustering likely leads to lower accuracy, but increased speed.
 
     When comparing two TLSH hashes, a distance score is calculated.
-    With a threshold of 100, binary files should be fairly similar
-    Treshold of 100 results in approximately 6.43% FP rate and 94.5% detect rate:
-    https://doi.org/10.1109/CTC.2013.9
     """
-    threshold  = 100
+    threshold = TLSH_THRESHOLD
     best_score = threshold + 1
     best_cluster = None
 
