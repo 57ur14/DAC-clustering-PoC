@@ -146,8 +146,6 @@ unipack_supported_packers = [
     'yzpack'
 ]
 
-def_make_directory_if_not_exists()
-
 # Create necessary directories if they do not exist
 if not os.path.exists(tmpdir):
     os.makedirs(tmpdir)
