@@ -113,18 +113,16 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
             'union_cluster': None
         }
 
-        # Skip if an unpacking tool returned an identical file
         if incoming == False:
-            if fileinfo['sha256'] in unpack_chain:
+            if unpack_chain is None:
+                # If first file in unpacking chain
+                # Create new unpacking chain with checksum of parent
+                unpack_chain = unpacks_from.copy()
+            elif fileinfo['sha256'] in unpack_chain:
                 # Abort if this the unpacking is looping
                 return None
-            else:
-                if unpack_chain is None:
-                    # If first file in unpacking chain
-                    # Create new unpacking chain with checksum of parent
-                    unpack_chain = unpacks_from.copy()
-                # Add checksum of this file to unpacking chain
-                unpack_chain.add(fileinfo['sha256'])
+            # Add checksum of this file to unpacking chain
+            unpack_chain.add(fileinfo['sha256'])
         try:
             pe = pefile.PE(data=rawfile)
         except Exception:
