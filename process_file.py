@@ -149,7 +149,7 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
             for unpacked_file in unpacked:              # For all unpacked files
                 if filetype.guess_mime(unpacked_file) == 'application/x-msdownload':
                     # Check if the file is an "exe" (pe file) and analyse it if it is
-                    analysis_result = analyse_file(unpacked_file, family=family, unpacks_from=set([fileinfo['sha256']]))
+                    analysis_result = analyse_file(unpacked_file, family=family, unpacks_from=set([fileinfo['sha256']]), unpack_chain=unpack_chain)
                     if analysis_result is not None:
                         fileinfo['contained_pe_files'].add(analysis_result)
                 else:
