@@ -112,16 +112,18 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
             'tlsh_cluster': None,
             'union_cluster': None
         }
-        
-        # TODO: Check if already analysed based on sha256
 
+        # Skip if an unpacking tool returned an identical file
+        if incoming == False and fileinfo['sha256'] in unpacks_from:
+            return None
+        
         try:
             pe = pefile.PE(data=rawfile)
         except Exception:
             # TODO: Find alternative solution
             #non_parsable_files[fileinfo['sha256']] = fileinfo   # If the file cannot be parsed by pefile, 
             return None                                         # add to list of files that cannot be parsed
- 
+
         pe.parse_data_directories()
 
         # Extract all features regardless of obfuscation
