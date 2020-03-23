@@ -58,16 +58,12 @@ def main():
     
     if args.path is not None:
         # Process single specified file
-        if PRINT_PROGRESS == True:
-            print("Processing file " + args.path)
         analyse_file(args.path, family=args.family, incoming=True)
     elif args.list is not None:
         # Load paths from file and process files
         with open(args.list, 'r') as infile:
             lines = infile.read().splitlines()
             for line in lines:
-                if PRINT_PROGRESS == True:
-                    print("Processing file " + line)
                 analyse_file(line, incoming=True)
     elif args.combined_list is not None:
         # Load paths and families from file and process the files
@@ -75,8 +71,6 @@ def main():
             lines = infile.read().splitlines()
             for line in lines:
                 path, fam = line.split(' ')
-                if PRINT_PROGRESS == True:
-                    print("Processing file " + path + " (" + fam + ")")
                 analyse_file(path, family=fam, incoming=True)
     else:
         # Print help if no arguments were specified
@@ -92,6 +86,12 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False):
     If "family" is None, it means that the family is unknown.
     If "incoming" is True, the file is added to the "incoming files" set.
     """
+
+    if PRINT_PROGRESS == True:
+        if family is None:
+            print('Processing file ' + fullfilepath)
+        else:
+            print('Processing file ' + fullfilepath + ' (' + family + ')')
 
     with open(fullfilepath, 'rb') as filehandle:
         rawfile = filehandle.read()
