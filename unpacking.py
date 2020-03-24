@@ -9,12 +9,13 @@
 # * unattended-unipacker - https://github.com/ntnu-rgb/unattended-unipacker
 # * upx
 
+import configparser
 import hashlib
 import os
 import shutil
 import subprocess
 import sys
-import configparser
+import time
 
 import peutils
 import requests
@@ -154,7 +155,6 @@ if not os.path.exists(generic_unpack_directory):
 if not os.path.exists(static_unpack_directory):
     os.makedirs(static_unpack_directory)
 
-
 def detect_obfuscation(filepath, pefile_pe, pefile_warnings):
     """
     Attempt to detect obfuscation; Packers, Protectors, etc.
@@ -212,6 +212,11 @@ def get_diec_output(filepath):
         diec_process = subprocess.run(["diec", filepath], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as err:
         print(err) # TODO: Handle error
+    except OSError as err:
+        print(err)
+        print("Sleeping 5 minutes before trying again")
+        time.sleep(300)
+        return get_diec_output(filepath)
     else:
         diec_output = diec_process.stdout.decode('utf-8')
         for line in diec_output.splitlines():
@@ -300,6 +305,11 @@ def unpack_upx(filepath):
     except subprocess.CalledProcessError:
         os.remove(tmp_path)                 # Delete copy if it could not be unpacked
         return []                           # Return an empty list if the file could not be unpacked
+    except OSError as err:
+        print(err)
+        print("Sleeping 5 minutes before trying again")
+        time.sleep(300)
+        return unpack_upx(filepath)
     else:
         tmp_path, newfilename = rename_to_sha256(tmp_path)
         newpath = os.path.join(static_unpack_directory, newfilename)
@@ -327,6 +337,11 @@ def unipack(filepath):
         return []               # Timeout reached, skip file
     except subprocess.CalledProcessError:
         return []               # unipacker crashed, skip file
+    except OSError as err:
+        print(err)
+        print("Sleeping 5 minutes before trying again")
+        time.sleep(300)
+        return unipack(filepath)
     else: # If Unipacker returned successfully
         newfilepath = generic_unpack_directory + 'unpacked_' + os.path.basename(filepath)
         if os.path.exists(newfilepath):
@@ -414,6 +429,11 @@ def clam_unpack(filepath):
         return unpacked             # Timeout reached, return empty list
     except subprocess.CalledProcessError:
         return unpacked             # clamscan crashed, return empty list
+    except OSError as err:
+        print(err)
+        print("Sleeping 5 minutes before trying again")
+        time.sleep(300)
+        return clam_unpack(filepath)
     else:
         for root, dirs, files in os.walk(tmpdir, topdown=False):
             for filename in files:
