@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # External dependencies:
@@ -8,14 +7,9 @@
 # tlsh:                         https://github.com/trendmicro/tlsh
 # pefile-extract-icon:          https://github.com/ntnu-rgb/pefile-extract-icon
 
-import argparse
 import configparser
 import hashlib
 import os
-import pickle
-import queue
-import subprocess
-from multiprocessing.managers import BaseManager
 
 import filetype
 import pefile
@@ -28,54 +22,7 @@ import unpacking
 config = configparser.ConfigParser()
 config.read('config.ini')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
-QUEUE_MANAGER_IP = config.get('queue_manager', 'ip')
-QUEUE_MANAGER_PORT = config.getint('queue_manager', 'port')
-QUEUE_MANAGER_KEY = config.get('queue_manager', 'key').encode('utf-8')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
-
-# Connect to queue
-class QueueManager(BaseManager):
-    pass
-QueueManager.register('get_queue')
-manager = QueueManager(address=(QUEUE_MANAGER_IP, QUEUE_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
-try:
-    manager.connect()
-except:
-    print("Cannot connect to queue manager. Please check the configuration.")
-    raise SystemExit
-queue = manager.get_queue()
-
-def main():
-    """
-    Parse arguments and begin extraction of file
-    """
-    parser = argparse.ArgumentParser(description='Process a file; Extract features and send to clustering.')
-    parser.add_argument('-P', '--path', help='Path to a single file that should be processed.')
-    parser.add_argument('-F', '--family', help='Malware family the single file belongs to (optional)')
-    parser.add_argument('-L', '--list', help='Path to a file containing paths to files on separate lines')
-    parser.add_argument('-C', '--combined-list', help='Path to a file where each line consists of <path> <family>. Path must not contain any spaces.')
-    args = parser.parse_args()
-    
-    if args.path is not None:
-        # Process single specified file
-        analyse_file(args.path, family=args.family, incoming=True)
-    elif args.list is not None:
-        # Load paths from file and process files
-        with open(args.list, 'r') as infile:
-            lines = infile.read().splitlines()
-            for line in lines:
-                analyse_file(line, incoming=True)
-    elif args.combined_list is not None:
-        # Load paths and families from file and process the files
-        with open(args.combined_list, 'r') as infile:
-            lines = infile.read().splitlines()
-            for line in lines:
-                path, fam = line.split(' ')
-                analyse_file(path, family=fam, incoming=True)
-    else:
-        # Print help if no arguments were specified
-        print("At least one of the following combinations must be supplied: (-P <path> [-F <family>]) | -L <path to list> | -C <path to combined-list>")
-        parser.print_help()
 
 def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, unpack_chain=None):
     """
@@ -89,9 +36,9 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
 
     if PRINT_PROGRESS == True:
         if family is None:
-            print('Processing file ' + fullfilepath)
+            print('Extracting features from ' + fullfilepath)
         else:
-            print('Processing file ' + fullfilepath + ' (' + family + ')')
+            print('Extracting features from ' + fullfilepath + ' (' + family + ')')
 
     with open(fullfilepath, 'rb') as filehandle:
         rawfile = filehandle.read()
@@ -103,8 +50,10 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
             'family': family,
             'incoming': incoming,
             'suspicious': False,
+            'obfuscation': None,
             'unpacks_from': unpacks_from,
             'contained_pe_files': set(),
+            'contained_pe_fileinfo': {},
             'contained_resources': set(),
             'imphash': None,
             'icon_hash': None,
@@ -131,9 +80,6 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
             return None                                         # add to list of files that cannot be parsed
 
         pe.parse_data_directories()
-
-        # Extract all features regardless of obfuscation
-        fileinfo['icon_hash'] = get_icon_hash(pe)
         fileinfo['pefile_warnings'] = pe.get_warnings()
         
         fileinfo['obfuscation'] = unpacking.detect_obfuscation(fullfilepath, pe, fileinfo['pefile_warnings'])
@@ -149,7 +95,10 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
                     # Check if the file is an "exe" (pe file) and analyse it if it is
                     analysis_result = analyse_file(unpacked_file, family=family, unpacks_from=set([fileinfo['sha256']]), unpack_chain=unpack_chain)
                     if analysis_result is not None:
-                        fileinfo['contained_pe_files'].add(analysis_result)
+                        # If file could be parsed by pefile
+                        # TODO: Could just change contained_pe_files to a dict and use .keys()
+                        fileinfo['contained_pe_files'].add(analysis_result['sha256'])
+                        fileinfo['contained_pe_fileinfo'][analysis_result['sha256']] = analysis_result
                 else:
                     # If the file is not a pe file or the pe file is corrupt, 
                     # simply add a hash of the unpacked file to "contained resources"
@@ -164,12 +113,11 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
             # Extract imphash and tlsh if file is not packed
             fileinfo['imphash'] = get_imphash(pe)
             fileinfo['tlsh'] = tlsh.hash(rawfile)
+        # Extract icon regardless of whether the file is packed or not
+        fileinfo['icon_hash'] = get_icon_hash(pe)
 
-
-        queue.put(fileinfo)                             # Send to clustering by adding to queue
-
-        return fileinfo['sha256']                       # Return True on success
-    return None                                         # Return False on failure
+        return fileinfo
+    return None                               # Return None on failure
 
 def get_icon_hash(pefile_pe):
     """
@@ -195,6 +143,3 @@ def get_imphash(pefile_pe):
         return None
     else:
         return imphash
-
-
-main() # Run main after parsing file

@@ -1,17 +1,12 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 # External dependencies:
 # tlsh
 
 import configparser
+from collections import Counter
 import os
 import pickle
-import queue
-import signal
-import sqlite3
-from collections import Counter
-from multiprocessing.managers import BaseManager
 
 import tlsh
 
@@ -25,25 +20,6 @@ CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 TLSH_THRESHOLD = config.getint('clustering', 'tlsh_threshold')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
-DATABASE_PATH = config.get('database', 'path')
-QUEUE_MANAGER_IP = config.get('queue_manager', 'ip')
-QUEUE_MANAGER_PORT = config.getint('queue_manager', 'port')
-QUEUE_MANAGER_KEY = config.get('queue_manager', 'key').encode('utf-8')
-
-# Open SQLite database
-#sqlite_conn = sqlite3.connect(DATABASE_PATH)
-
-# Connect to queue
-class QueueManager(BaseManager):
-    pass
-QueueManager.register('get_queue')
-manager = QueueManager(address=(QUEUE_MANAGER_IP, QUEUE_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
-try:
-    manager.connect()
-except:
-    print("Cannot connect to queue manager. Please check the configuration.")
-    raise SystemExit
-queue = manager.get_queue()
 
 # Decalare global variables
 files = {}                  # Dictionary of of files
@@ -63,14 +39,13 @@ def cluster_file(fileinfo):
     # TODO: Add checks if file already has been added to union cluster?
     # Is this possible? Don't know; Should check
 
-    if (len(fileinfo['contained_pe_files']) != 0
-            and cluster_on_contained_pe(fileinfo) is not None):
-        # If file contained another file and it 
-        # could be clustered based on child,
-        # cluster based on child and quit.
-        return
+    if len(fileinfo['contained_pe_files']) != 0:
+        # If file contained another file and it could be clustered 
+        # based on a child, cluster based on child
+        union_cluster_index = cluster_on_contained_pe(fileinfo)
 
-    if ((CLUSTER_PACKED_FILES == True or fileinfo['obfuscation']['type'] == 'none')
+    if (union_cluster_index is None
+            and (fileinfo['obfuscation']['type'] == 'none' or CLUSTER_PACKED_FILES == True)
             and fileinfo['imphash'] is not None
             and CLUSTER_WITH_IMPHASH == True):
         # Cluster using imphash if imphash is present 
@@ -141,6 +116,29 @@ def icon_cluster(fileinfo):
         icon_clusters[fileinfo['icon_hash']] = set([fileinfo['sha256']])
         return None
 
+def cluster_on_contained_pe(fileinfo):
+    """
+    Attempt to add file to any cluster that a contained PE file is in.
+    This is possible since unpacked files are sent to clustering before parent.
+    """
+
+    # Attempt to cluster based on children
+    for sha256 in fileinfo['contained_pe_files']:
+        # Prefer files that are not packed
+        if (files[sha256]['obfuscation']['type'] == 'none'
+                and files[sha256]['union_cluster'] is not None):
+            return files[sha256]['union_cluster']
+    
+    if fileinfo['union_cluster'] is None:
+        # If the file was not added to a union cluster yet
+        # Attempt to cluster based on children that might be packed
+        for sha256 in fileinfo['contained_pe_files']:
+            if files[sha256]['union_cluster'] is not None:
+                return files[sha256]['union_cluster']
+    
+    # Return None if no suitable cluster was found
+    return None
+
 def cluster_on_contained_resources(fileinfo):
     """
     Add to clusters for all contained resources.
@@ -163,26 +161,6 @@ def cluster_on_contained_resources(fileinfo):
     else:
         return None
 
-def cluster_on_contained_pe(fileinfo):
-    """
-    Attempt to add file to any cluster that a contained PE file is in.
-    This is possible since unpacked files are sent to clustering before parent.
-    """
-    for sha256 in fileinfo['contained_pe_files']:
-        if files[sha256]['union_cluster'] is not None:
-            fileinfo['union_cluster'] = files[sha256]['union_cluster']
-            union_clusters[fileinfo['union_cluster']].add(fileinfo['sha256'])
-            break
-    
-    # If parent (this) file was added to union cluster
-    if fileinfo['union_cluster'] is not None:
-        for sha256 in fileinfo['contained_pe_files']:
-            # and child (unpacked PE) is not in any union cluster
-            if files[sha256]['union_cluster'] is None:
-                # Then add to union cluster of parent
-                files[sha256]['union_cluster'] = fileinfo['union_cluster']
-    return fileinfo['union_cluster']
-
 def tlsh_cluster(fileinfo):
     """
     Cluster file based on TrendMicro Locally Sensitive Hash
@@ -195,6 +173,10 @@ def tlsh_cluster(fileinfo):
     This type of clustering likely leads to lower accuracy, but increased speed.
 
     When comparing two TLSH hashes, a distance score is calculated.
+
+    TODO: Should the file rather be compared to all other files?
+    ...And should the threshold be further decreased?
+    With a database of very many files it would probably be fine
     """
     threshold = TLSH_THRESHOLD
     best_score = threshold + 1
@@ -279,49 +261,3 @@ def save_to_pickles():
         pickle.dump(resource_clusters, picklefile)
     with open('pickles/union_clusters.pkl', 'wb') as picklefile:
         pickle.dump(union_clusters, picklefile)
-
-def sigint_handler(signum, frame):
-    """
-    Do not quit immediately if recieving SIGINT.
-    In stead, modify "continue_working" such that the script 
-    will stop attempting to retrieve new items from the queue
-    and rather save variables to pickles.
-    """
-    print("SIGINT recieved. Quitting and saving state after processing the current file.")
-    global continue_working
-    continue_working = False
-
-# Create SIGINT handler
-signal.signal(signal.SIGINT, sigint_handler)
-
-# Start working on elements in queue
-continue_working = True
-while continue_working == True:
-    try:
-        file_to_cluster = queue.get()
-    except EOFError:
-        print("Queue not available. Please check if the queue manager is still running.")
-        break
-    else:
-        if file_to_cluster['sha256'] in files.keys():
-            print("Merging file with existing information  " + file_to_cluster['sha256'])
-            # If file has been received and clustered before
-            # Merge new data into the existing data.
-            if file_to_cluster['incoming']:
-                files[file_to_cluster['sha256']]['incoming'] = True
-            else:       # If file is not incoming (was unpacked from another file)
-                if files[file_to_cluster['sha256']]['incoming']:
-                    files[file_to_cluster['sha256']]['incoming'] = True
-                files[file_to_cluster['sha256']]['unpacks_from'].update(file_to_cluster['unpacks_from'])
-        else:
-            print("Clustering file " + file_to_cluster['sha256'])
-            files[file_to_cluster['sha256']] = file_to_cluster
-            cluster_file(file_to_cluster)   
-        # TODO: Write to database?
-        #sqlite_conn.commit()   # Commit changes
-
-# Save results to pickles when done working
-save_to_pickles()
-
-# TODO: Remove?
-#sqlite_conn.close()
