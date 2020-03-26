@@ -148,8 +148,6 @@ unipack_supported_packers = [
 ]
 
 # Create necessary directories if they do not exist
-if not os.path.exists(tmpdir):
-    os.makedirs(tmpdir)
 if not os.path.exists(generic_unpack_directory):
     os.makedirs(generic_unpack_directory)
 if not os.path.exists(static_unpack_directory):
