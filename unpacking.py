@@ -28,9 +28,6 @@ unpack_directory = config.get('clustering', 'unpacking_base_directory')
 static_unpack_directory = unpack_directory + 'static/'
 generic_unpack_directory = unpack_directory + 'generic/'
 
-tmpfile_object = tempfile.TemporaryDirectory()
-tmpdir = tmpfile_object.name
-
 packer_sections = {
     '.aspack': 'aspack',
     'ASPack': 'aspack',
@@ -279,6 +276,9 @@ def unpack_file(filepath, fileinfo, pefile_pe):
     Returns a list of unpacked files. In most cases an empty list or a list with a single filepath.
     """
 
+    tmpfile_object = tempfile.TemporaryDirectory()
+    tmpdir = tmpfile_object.name
+
     unpacked = []
     if 'protector' in fileinfo['obfuscation'] and fileinfo['obfuscation']['protector'] == 'themida':  # Skip the file if it cannot be unpacked
         return unpacked                                         # (protected by virtualizers and such)
@@ -287,18 +287,20 @@ def unpack_file(filepath, fileinfo, pefile_pe):
     
     if fileinfo['obfuscation']['type'] == 'packed':
         if 'upx' in fileinfo['obfuscation']['packer']:
-            unpacked = unpack_upx(filepath)
+            unpacked = unpack_upx(filepath, tmpdir)
         
     if len(unpacked) == 0 and (('packer' in fileinfo['obfuscation'] and fileinfo['obfuscation']['packer'] in clam_supported_packers) or ('protector' in fileinfo['obfuscation'] and fileinfo['obfuscation']['protector'] in clam_supported_packers)):
-        unpacked = clam_unpack(filepath)    # Attempt static unpacking with ClamAV
+        # Attempt static unpacking with ClamAV
+        unpacked = clam_unpack(filepath, tmpdir)
 
     if len(unpacked) == 0 and 'packer' in fileinfo['obfuscation'] and fileinfo['obfuscation']['packer'] in unipack_supported_packers:
-        unpacked = unipack(filepath)        # Attempt to generic unpacking with unipacker
+        # Attempt to generic unpacking with unipacker
+        unpacked = unipack(filepath, tmpdir)        
 
     # Only return files that are not equal to the parent (does not have identical sha256sums):
     return [unpacked_f for unpacked_f in unpacked if  fileinfo['sha256'] != os.path.basename(unpacked_f)]
 
-def unpack_upx(filepath):
+def unpack_upx(filepath, tmpdir):
     """
     Unpack with UPX
 
@@ -323,7 +325,7 @@ def unpack_upx(filepath):
         shutil.move(tmp_path, newpath)      # Move file to directory of unpacked files
         return [newpath]                    # Return new path of the unpacked file if successful
 
-def unipack(filepath):
+def unipack(filepath, tmpdir):
     """
     Attempt to unpack a file at a given path with unipack.
     Emulates execution over a maximum of 5 seconds in an attempt to unpack PE-files that are packed with "simple" packers.
@@ -372,7 +374,7 @@ def rename_to_sha256(filepath):
             return newpath, sha256sum       # Return the new path of the file and the sha256-sum (filename)
     return None, None                       # Return None if the file could not be opened
 
-def clam_unpack(filepath):
+def clam_unpack(filepath, tmpdir):
     """
     Attempt to unpack the malware statically with ClamAV.
     Returns a list that can either be empty or contain paths to files unpacked from the file at the specified path.

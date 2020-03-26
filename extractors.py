@@ -8,6 +8,8 @@ import queue
 import signal
 from multiprocessing.managers import BaseManager
 
+import feature_extraction
+
 # Retreive configuration
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -35,9 +37,6 @@ def sigint_handler(signum, frame):
     continue_working = False
 
 def feature_extraction_worker():
-    # Import feature_extraction separately for each thread/process to 
-    # avoid race condition (each thread will have separate tmp directory)
-    import feature_extraction
 
     # Connect to feature extraction queue and clustering queue
     extraction_manager = QueueManager(address=(QUEUE_MANAGER_IP, EXTRACTION_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
