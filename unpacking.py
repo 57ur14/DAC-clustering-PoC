@@ -305,8 +305,6 @@ def unpack_upx(filepath, tmpdir):
     Dependencies (can be installed from apt repositories in Ubuntu):
     * upx
     """
-    print("tmpdir: " + str(tmpdir))
-    print("filepath: " + str(filepath))
     tmp_path = os.path.join(tmpdir, os.path.basename(filepath))
     shutil.copyfile(filepath, tmp_path)     # Copy file to unpack directory
     try:
@@ -358,21 +356,6 @@ def unipack(filepath, tmpdir):
             return [rename_to_sha256(newfilepath)[0]]
         else:
             return []           # Skip file if unpacked file did not exist
-
-def rename_to_sha256(filepath):
-    """
-    Rename a file specified by a path to the sha256sum of the files and return the new path
-    """
-    with open(filepath, 'rb') as filehandle:
-        rawfile = filehandle.read()
-        directory = os.path.dirname(filepath)
-        sha256sum = hashlib.sha256(rawfile).hexdigest()
-        newpath = directory + '/' + sha256sum
-        if filepath != newpath:             # Only rename if it is not already named as the sha256sum
-            shutil.move(filepath, newpath)  # Rename file to the sha256sum
-        else:
-            return newpath, sha256sum       # Return the new path of the file and the sha256-sum (filename)
-    return None, None                       # Return None if the file could not be opened
 
 def clam_unpack(filepath, tmpdir):
     """
@@ -454,3 +437,17 @@ def clam_unpack(filepath, tmpdir):
             for dirname in dirs:
                 os.rmdir(os.path.join(root, dirname))
         return unpacked
+
+def rename_to_sha256(filepath):
+    """
+    Rename a file specified by a path to the sha256sum of the files and return the new path
+    """
+    with open(filepath, 'rb') as filehandle:
+        rawfile = filehandle.read()
+        directory = os.path.dirname(filepath)
+        sha256sum = hashlib.sha256(rawfile).hexdigest()
+        newpath = directory + '/' + sha256sum
+        if filepath != newpath:             # Only rename if it is not already named as the sha256sum
+            shutil.move(filepath, newpath)  # Rename file to the sha256sum
+        return newpath, sha256sum       # Return the new path of the file and the sha256-sum (filename)
+    return None, None                       # Return None if the file could not be opened
