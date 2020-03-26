@@ -305,6 +305,8 @@ def unpack_upx(filepath, tmpdir):
     Dependencies (can be installed from apt repositories in Ubuntu):
     * upx
     """
+    print("tmpdir: " + str(tmpdir))
+    print("filepath: " + str(filepath))
     tmp_path = os.path.join(tmpdir, os.path.basename(filepath))
     shutil.copyfile(filepath, tmp_path)     # Copy file to unpack directory
     try:
@@ -316,7 +318,7 @@ def unpack_upx(filepath, tmpdir):
         print(err)
         print("Sleeping 5 minutes before trying again")
         time.sleep(300)
-        return unpack_upx(filepath)
+        return unpack_upx(filepath, tmpdir)
     else:
         tmp_path, newfilename = rename_to_sha256(tmp_path)
         newpath = os.path.join(static_unpack_directory, newfilename)
@@ -348,7 +350,7 @@ def unipack(filepath, tmpdir):
         print(err)
         print("Sleeping 5 minutes before trying again")
         time.sleep(300)
-        return unipack(filepath)
+        return unipack(filepath, tmpdir)
     else: # If Unipacker returned successfully
         newfilepath = generic_unpack_directory + 'unpacked_' + os.path.basename(filepath)
         if os.path.exists(newfilepath):
@@ -441,7 +443,7 @@ def clam_unpack(filepath, tmpdir):
         print(err)
         print("Sleeping 5 minutes before trying again")
         time.sleep(300)
-        return clam_unpack(filepath)
+        return clam_unpack(filepath, tmpdir)
     else:
         for root, dirs, files in os.walk(tmpdir, topdown=False):
             for filename in files:
