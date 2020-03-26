@@ -24,7 +24,7 @@ EXTRACTION_MANAGER_PORT = config.getint('queue_managers', 'extraction_port')
 CLUSTER_MANAGER_PORT = config.getint('queue_managers', 'clustering_port')
 QUEUE_MANAGER_KEY = config.get('queue_managers', 'key').encode('utf-8')
 QUEUE_TIMEOUT = config.getint('queue_managers', 'timeout')
-
+EXTRACTION_THREADS_COUNT = config.getint('queue_managers', 'extraction_threads_count')
 
 # Define queue manager class
 class QueueManager(BaseManager):
@@ -221,7 +221,7 @@ if __name__ == '__main__':
         # Create a thread that retrieves files from feature extraction queue,
         # extracts their features and adds them to the clustering queue.
         feature_extraction_processes = []
-        for i in range(multiprocessing.cpu_count()):
+        for i in range(EXTRACTION_THREADS_COUNT):
             p = multiprocessing.Process(target=feature_extraction_worker, daemon=True)
             p.start()
             feature_extraction_processes.append(p)
