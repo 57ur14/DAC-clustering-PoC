@@ -58,12 +58,16 @@ def feature_extraction_worker():
                 print("Queue not available. Please check if the feature extraction queue manager is still running.")
                 break
             except queue.Empty:
+                """
                 # Stop if queue is empty and SIGINT has been sent
                 if continue_working == True:
                     print("Waiting for files to extract")
                     continue
                 else:
                     break
+                """
+                # TODO: Remove (for measuring time)
+                break
             else:
                 result = feature_extraction.analyse_file(file_to_cluster['path'], family=file_to_cluster['family'], incoming=True)
                 send_to_clustering(result, cluster_queue)
