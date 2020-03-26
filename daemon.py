@@ -6,6 +6,7 @@ import configparser
 import multiprocessing
 import queue
 import signal
+import time
 from multiprocessing.managers import BaseManager
 
 import clustering
@@ -113,6 +114,9 @@ if __name__ == '__main__':
     # Create queue daemon for files to perform clustering on 
     cluster_queue_proc = multiprocessing.Process(target=serve_simple_queue, args=(QUEUE_MANAGER_IP, CLUSTER_MANAGER_PORT, QUEUE_MANAGER_KEY), daemon=True)
     cluster_queue_proc.start()
+
+    # Sleep for a second to ensure queues are running
+    time.sleep(1)
 
     # Create a process that performs clustering on items in the clustering queue
     clustering_proc = multiprocessing.Process(target=perform_clustering)

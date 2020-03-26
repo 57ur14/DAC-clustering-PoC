@@ -308,7 +308,10 @@ def unpack_upx(filepath):
     try:
         subprocess.run(["upx", "-d", tmp_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError:
-        os.remove(tmp_path)                 # Delete copy if it could not be unpacked
+        try:
+            os.remove(tmp_path)             # Delete copy if it could not be unpacked
+        except FileNotFoundError:
+            return []
         return []                           # Return an empty list if the file could not be unpacked
     except OSError as err:
         print(err)
@@ -364,10 +367,14 @@ def rename_to_sha256(filepath):
         directory = os.path.dirname(filepath)
         sha256sum = hashlib.sha256(rawfile).hexdigest()
         newpath = directory + '/' + sha256sum
-        if filepath != newpath:             # Only rename if it is not already named as the sha256sum
+        try:                                # Only rename if it is not already named as the sha256sum
             shutil.move(filepath, newpath)  # Rename file to the sha256sum
-        return newpath, sha256sum           # Return the new path of the file and the sha256-sum (filename)
-    return None                             # Return None if the file could not be opened
+        except Exception as err:
+            print(err)
+            return None, None
+        else:
+            return newpath, sha256sum       # Return the new path of the file and the sha256-sum (filename)
+    return None, None                       # Return None if the file could not be opened
 
 def clam_unpack(filepath):
     """
