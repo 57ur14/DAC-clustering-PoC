@@ -19,6 +19,7 @@ CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 TLSH_THRESHOLD = config.getint('clustering', 'tlsh_threshold')
+TLSH_FAST_CLUSTERING = config.getboolean('clustering', 'tlsh_fast_clustering')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
 
 # Decalare global variables
@@ -182,11 +183,22 @@ def tlsh_cluster(fileinfo):
     best_score = threshold + 1
     best_cluster = None
 
-    for root_value in tlsh_clusters.keys():
-        score = tlsh.diff(fileinfo['tlsh'], root_value)
-        if score <= threshold and score < best_score:
-            best_score = score
-            best_cluster = root_value
+    if TLSH_FAST_CLUSTERING:
+        # If fast TLSH clustering (compare with first file in each cluster)
+        for root_value in tlsh_clusters.keys():
+            score = tlsh.diff(fileinfo['tlsh'], root_value)
+            if score < best_score:
+                best_score = score
+                best_cluster = root_value
+    else:
+        # If not fast TLSH clustering (compare with all files)
+        for otherfile in files.values():
+            if (otherfile['tlsh'] is not None 
+                    and fileinfo['sha256'] != otherfile['sha256']):
+                score = tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])
+                if score < best_score:
+                    best_score = score
+                    best_cluster = otherfile['tlsh_cluster']
     if best_cluster is not None:
         # If match was found, add to cluster and union cluster 
         # of first file in the tlsh cluster.
@@ -195,7 +207,7 @@ def tlsh_cluster(fileinfo):
             break
         union_clusters[fileinfo['union_cluster']].add(fileinfo['sha256'])
         # Must add to tlsh cluster after iterating over
-        # dictionary to avoid retrieving itself.
+        # set to avoid retrieving itself.
         tlsh_clusters[best_cluster].add(fileinfo['sha256'])
         fileinfo['tlsh_cluster'] = best_cluster
     else:
