@@ -7,8 +7,6 @@ import pickle
 
 config = configparser.ConfigParser()
 config.read('config.ini')
-DEBUG = config.getboolean('clustering', 'debug')
-DEBUG_FILECOUNT = config.getint('clustering', 'debug_filecount')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
