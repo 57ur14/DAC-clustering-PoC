@@ -23,7 +23,6 @@ import requests
 
 config = configparser.ConfigParser()
 config.read('config.ini')
-DETECT_IT_EASY_ONLY = config.getint('clustering', 'detect_it_easy_only')
 unpack_directory = config.get('clustering', 'unpacking_base_directory')
 static_unpack_directory = unpack_directory + 'static/'
 generic_unpack_directory = unpack_directory + 'generic/'
@@ -156,23 +155,22 @@ if not os.path.exists(static_unpack_directory):
 def detect_obfuscation(filepath, pefile_pe, pefile_warnings):
     """
     Attempt to detect obfuscation; Packers, Protectors, etc.
+    Attempts to detect obfuscation through various methods;
+    Identifying section names used by common packers, DetectItEasy,
+    or by identifying if file seems to contain few imports and high entropy data.
     """
     obfuscation = {'type': 'none'}
 
-    if DETECT_IT_EASY_ONLY:
-        obfuscation = detect_obfuscation_by_diec(filepath)
-        return obfuscation
-    else:
-        # Attempt to detect packing by section names
-        obfuscation = detect_obfuscation_by_section_names(pefile_pe)
+    # Attempt to detect packing by section names
+    obfuscation = detect_obfuscation_by_section_names(pefile_pe)
 
-        if obfuscation['type'] == 'none':
-            # Use Detect It Easy to detect packer/protector etc. if it was not detected by section name
-            obfuscation = detect_obfuscation_by_diec(filepath)
-        if obfuscation['type'] == 'none':
-            # Check if file seems to be packed based on entropy and imports
-            obfuscation = detect_obfuscation_by_section_properties(pefile_pe, pefile_warnings)
-        return obfuscation
+    if obfuscation['type'] == 'none':
+        # Use Detect It Easy to detect packer/protector etc. if it was not detected by section name
+        obfuscation = detect_obfuscation_by_diec(filepath)
+    if obfuscation['type'] == 'none':
+        # Check if file seems to be packed based on entropy and imports
+        obfuscation = detect_obfuscation_by_section_properties(pefile_pe, pefile_warnings)
+    return obfuscation
 
 def detect_obfuscation_by_section_names(pefile_pe):
     """

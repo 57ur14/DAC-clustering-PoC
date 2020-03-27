@@ -33,7 +33,6 @@ union_clusters = []         # List of clusters where files have been joined
 def cluster_file(fileinfo):
     """
     Cluster the incoming file into existing clusters or create new clusters
-    TODO: Investigate if multiple families commonly share icon (they probably do)
     """
     union_cluster_index = None
 
@@ -108,11 +107,14 @@ def icon_cluster(fileinfo):
     Return the index of the union cluster the file should be placed into
     or None if the file does not fit in any union cluster.
     """
-    if fileinfo['icon_hash'] in icon_clusters:
-        icon_clusters[fileinfo['icon_hash']].add(fileinfo['sha256'])
-        for sha256 in icon_clusters[fileinfo['icon_hash']]:
-            # Retrieve first item in set
-            return files[sha256]['union_cluster']
+    if fileinfo['icon_hash'] in icon_clusters.keys():
+        if not_bad_cluster(icon_clusters[fileinfo['icon_hash']]):
+            icon_clusters[fileinfo['icon_hash']].add(fileinfo['sha256'])
+            for sha256 in icon_clusters[fileinfo['icon_hash']]:
+                # Retrieve first item in set
+                return files[sha256]['union_cluster']
+        else:
+            return None
     else:
         icon_clusters[fileinfo['icon_hash']] = set([fileinfo['sha256']])
         return None
@@ -149,9 +151,12 @@ def cluster_on_contained_resources(fileinfo):
     union_cluster_of_files = []     # Store all suitable union clusters
     for resource_hash in fileinfo['contained_resources']:
         if resource_hash in resource_clusters.keys():
-            resource_clusters[resource_hash].add(fileinfo['sha256'])
-            for otherfile in resource_clusters[resource_hash]:
-                union_cluster_of_files.append(files[otherfile]['union_cluster'])
+            if not_bad_cluster(resource_clusters[resource_hash]):
+                resource_clusters[resource_hash].add(fileinfo['sha256'])
+                for otherfile in resource_clusters[resource_hash]:
+                    union_cluster_of_files.append(files[otherfile]['union_cluster'])
+            else:
+                continue
         else:
             resource_clusters[resource_hash] = set([fileinfo['sha256']])
 
@@ -231,6 +236,43 @@ def tlsh_cluster(fileinfo):
                 # And also add to this new union cluster
                 otherfile['union_cluster'] = fileinfo['union_cluster']
                 union_clusters[fileinfo['union_cluster']].add(otherfile['sha256'])
+
+def not_bad_cluster(fileset):
+    """
+    Check if a cluster is not bad / unpure.
+    This involves iterating through files where "training == True"
+        and checking the how "pure" the cluster seems to be.
+    Returns false if more than a certain ratio of the files belong to a different
+        family than the majority if the cluster has more than a minimum number labelled files.
+    """
+    MINIMUM_PURITY = 0.8
+
+    families = {}
+    total_training_files = 0
+    minimum_labelled_files = 1 / (1 - MINIMUM_PURITY)
+
+    for sha256 in fileset:
+        fileinfo = files[sha256]
+        if fileinfo['training'] == True:
+            total_training_files += 1
+            family = fileinfo['family']
+            if family in families.keys():
+                families[family] += 1
+            else:
+                families[family] = 1
+    
+    if total_training_files >= minimum_labelled_files:
+        most_common_family = max(families, key=families.get)
+        number_of_most_common = families[most_common_family]
+        if number_of_most_common / total_training_files >= MINIMUM_PURITY:
+            # If cluster purity is sufficiently pure, return true (not bad)
+            return True
+        else:
+            # Or else, return false (cluster is bad)
+            return False
+    else:
+        # If too few files, return true (not bad)
+        return True
 
 def load_from_pickles():
     global files

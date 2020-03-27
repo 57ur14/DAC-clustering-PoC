@@ -20,6 +20,8 @@ CLUSTER_MANAGER_PORT = config.getint('queue_managers', 'clustering_port')
 QUEUE_MANAGER_KEY = config.get('queue_managers', 'key').encode('utf-8')
 QUEUE_TIMEOUT = config.getint('queue_managers', 'timeout')
 
+TRAINING = True
+
 # Define queue manager class
 class QueueManager(BaseManager):
     pass
@@ -69,7 +71,7 @@ def feature_extraction_worker():
                 # TODO: Remove (for measuring time)
                 break
             else:
-                result = feature_extraction.analyse_file(file_to_cluster['path'], family=file_to_cluster['family'], incoming=True)
+                result = feature_extraction.analyse_file(file_to_cluster['path'], family=file_to_cluster['family'], incoming=True, training=TRAINING)
                 send_to_clustering(result, cluster_queue)
 
 def send_to_clustering(fileinfo, cluster_queue):

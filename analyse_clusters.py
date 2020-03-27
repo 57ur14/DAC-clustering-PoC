@@ -21,8 +21,11 @@ nonclustered = set()        # Set of files not belonging to a cluster
 stats = {
     'number_of_incoming_pe': 0,
     'unpacked_pe_files': 0,
+    'successfully_unpacked_incoming': 0,
     'total_pe_files': 0,
-    'obfuscated_pe_files': 0,
+    'total_obfuscated_pe_files': 0,
+    'obfuscated_unpacked_pe_files': 0,
+    'obfuscated_incoming_pe_files': 0,
     'number_of_good_clusters': 0,
     'total_clustered_files': 0,
     'mean_cluster_size': 0,
@@ -87,13 +90,28 @@ def create_final_clusters():
         if fileinfo['incoming'] == True:
             # Gather info in all files that were incoming 
             # (and not unpacked from another PE)
+
+            # Count as incoming pe
             stats['number_of_incoming_pe'] += 1
-            if fileinfo['union_cluster'] != None:   # Successful if in a cluster
+
+            if fileinfo['obfuscation']['type'] != 'none':
+                # Count as an obfuscated incoming file if packed
+                stats['obfuscated_incoming_pe_files'] += 1
+
+                if (fileinfo['unpacks_to_nonpacked_pe'] == True
+                        or fileinfo['contained_resources']):
+                    # If incoming, packed file was unpacked to nonpacked
+                    # pe or a resource, count as successfully unpacked
+                    stats['successfully_unpacked_incoming'] += 1
+            if fileinfo['union_cluster'] != None:
+                # Successfully clustered if in a cluster
                 stats['successfully_clustered_incoming'] += 1
-            else:                                   # Unsuccessful if not in a cluster
+            else:
+                # Unsuccessful if not in a cluster
                 stats['not_clustered_incoming'] += 1
-        if fileinfo['obfuscation']['type'] != 'none':
-            stats['obfuscated_pe_files'] += 1
+        elif fileinfo['obfuscation']['type'] != 'none':
+            # If not incomung but obfuscated, count as obfuscated unpacked
+            stats['obfuscated_unpacked_pe_files'] += 1
 
     # Identify cluster "purity"
     mean_purity = 0
@@ -124,6 +142,7 @@ def create_final_clusters():
 
     stats['total_pe_files'] = len(files)
     stats['unpacked_pe_files'] = stats['total_pe_files'] - stats['number_of_incoming_pe']
+    stats['total_obfuscated_pe_files'] = stats['obfuscated_unpacked_pe_files'] + stats['obfuscated_incoming_pe_files']
     if stats['number_of_good_clusters'] != 0:
         stats['mean_cluster_size'] = stats['total_clustered_files'] / stats['number_of_good_clusters']
     if stats['number_of_incoming_pe'] != 0:

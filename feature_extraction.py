@@ -23,15 +23,21 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
+MAX_UNPACK_RECURSION = config.getint('feature_extraction', 'max_unpack_recursion')
+DETECT_IT_EASY_ONLY = config.getint('feature_extraction', 'detect_it_easy_only')
 
-def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, unpack_chain=None):
+def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), incoming=False, unpack_chain=None):
     """
     Analyse a pe-file at the given filepath, add to list of files and return sha256sum
     Can also specify the family the pe belongs to (if known) and the 
     sha256sum of the file that that unpacked the incoming file.
 
-    If "family" is None, it means that the family is unknown.
-    If "incoming" is True, the file is added to the "incoming files" set.
+    @family String / None: If it is None, it indicates that the family is unknown.
+    @training Boolean: Indicates if the file is part of the "training" where the clustering should know the family
+    @incoming Boolean: Indicates if the file was really incoming to feature 
+        extraction or just unpacked from another PE.
+    @unpack_chain set: Holds a list of "parent" PE-files that has been part of the unpacking. 
+        Weird behavior in unipacker could otherwise result in infinite recursion.
     """
 
     if PRINT_PROGRESS == True:
@@ -49,10 +55,12 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
             'sha256': hashlib.sha256(rawfile).hexdigest(),
             'family': family,
             'incoming': incoming,
+            'training': training,
             'suspicious': False,
             'obfuscation': None,
             'unpacks_from': unpacks_from,
             'contained_pe_files': set(),
+            'unpacks_to_nonpacked_pe': False,
             'contained_pe_fileinfo': {},
             'contained_resources': set(),
             'imphash': None,
@@ -81,10 +89,15 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
 
         pe.parse_data_directories()
         fileinfo['pefile_warnings'] = pe.get_warnings()
-        
-        fileinfo['obfuscation'] = unpacking.detect_obfuscation(fullfilepath, pe, fileinfo['pefile_warnings'])
-        if len(fileinfo['pefile_warnings']) != 0:       # Simple method of identifying if file seems suspicious
-            fileinfo['suspicious'] = True               # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
+        if len(fileinfo['pefile_warnings']) != 0:
+            # Simple method of identifying if file seems suspicious
+            # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
+            fileinfo['suspicious'] = True
+
+        if DETECT_IT_EASY_ONLY:
+            fileinfo['obfuscation'] = unpacking.detect_obfuscation_by_diec(fullfilepath)
+        else:
+            fileinfo['obfuscation'] = unpacking.detect_obfuscation(fullfilepath, pe, fileinfo['pefile_warnings'])
 
         if fileinfo['obfuscation']['type'] != 'none':   # If file seems to be packed
             # Attempt to unpack the packed file
@@ -92,11 +105,21 @@ def analyse_file(fullfilepath, family=None, unpacks_from=set(), incoming=False, 
             
             for unpacked_file in unpacked:              # For all unpacked files
                 if filetype.guess_mime(unpacked_file) == 'application/x-msdownload':
-                    # Check if the file is an "exe" (pe file) and analyse it if it is
+                    # Check if the file is an "exe" (pe file) and analyse it if so
+                    if (unpack_chain is not None 
+                            and len(unpack_chain) >= MAX_UNPACK_RECURSION):
+                        # Skip unpacking if this file has been recursively unpacking 
+                        # more than a specified number of times.
+                        continue
                     analysis_result = analyse_file(unpacked_file, family=family, unpacks_from=set([fileinfo['sha256']]), unpack_chain=unpack_chain)
                     if analysis_result is not None:
                         # If file could be parsed by pefile
                         # TODO: Could just change contained_pe_files to a dict and use .keys()
+                        if (analysis_result['obfuscation']['type'] == 'none'
+                                or analysis_result['unpacks_to_nonpacked_pe'] == True):
+                            # If contained file is not packed or unpacks to a nonpacked file
+                            # Mark this file as "unpacks to nonpacked pe"
+                            fileinfo['unpacks_to_nonpacked_pe'] = True
                         fileinfo['contained_pe_files'].add(analysis_result['sha256'])
                         fileinfo['contained_pe_fileinfo'][analysis_result['sha256']] = analysis_result
                 else:
@@ -123,8 +146,7 @@ def get_icon_hash(pefile_pe):
     """
     Retrieve a hash of the icon a Windows system would prefer to use.
     Returns None if no RT_GROUP_ICON was found or the icon could not be extracted properly.
-    https://docs.microsoft.com/en-us/windows/win32/menurc/about-icons#icon-display
-    TODO: Beskriv hvorfor xxhash64 brukes: https://aras-p.info/blog/2016/08/02/Hash-Functions-all-the-way-down/
+    Uses xxhash to retrieve a hash that is fast to calculate and with good uniqueness.
     """
     extract = extract_icon.ExtractIcon(pefile_pe=pefile_pe)
     raw = extract.get_raw_windows_preferred_icon()
