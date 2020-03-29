@@ -37,7 +37,7 @@ icon_clusters = {}          # Dictionary of clusters where files have equal icon
 tlsh_clusters = {}      # Dictionary of tlsh clusters, identified by tlsh hash of root file
 union_clusters = []
 
-def create_final_clusters():
+def analyse_union_clusters():
     """
     TODO: Passer dette til online clustering?
     Må kanskje heller legge mye av dette inn i "cluster" funksjonen?
@@ -115,27 +115,15 @@ def create_final_clusters():
     mean_purity = 0
     num_real_clusters = 0
     num_pure_clusters = 0
-
+    
     for cluster in union_clusters:
         if not cluster:
             continue        # Skip if cluster does not contain any files
 
         num_real_clusters += 1
-        families_in_cluster = {}
-        for sha256 in cluster:
-            family = files[sha256]['family']
-            if family not in families_in_cluster:
-                families_in_cluster[family] = 1
-            else:
-                families_in_cluster[family] += 1
-        # Retrieve the most common family (might be even, but should not matter)
-        most_common_family = max(families_in_cluster, key=families_in_cluster.get)
-        num_files_in_cluster = sum(families_in_cluster.values())
-        num_files_in_most_common = families_in_cluster[most_common_family]
-        #num_in_other_families = num_files_in_cluster - num_files_in_most_common
-        cluster_purity = num_files_in_most_common / num_files_in_cluster
+        cluster_purity, cluster_size, most_common_family, files_in_most_common = get_purity(cluster)
         mean_purity += cluster_purity
-        if num_files_in_most_common == num_files_in_cluster:
+        if cluster_purity == 1:
             num_pure_clusters += 1
 
     stats['total_pe_files'] = len(files)
@@ -152,6 +140,51 @@ def create_final_clusters():
 
     for key, value in stats.items():
         print(str(key) + ": " + str(value))
+
+def get_purity(sha256hashes):
+    families_in_cluster = {}
+    cluster_size = len(sha256hashes)
+    for sha256 in sha256hashes:
+        family = files[sha256]['family']
+        if family not in families_in_cluster.keys():
+            families_in_cluster[family] = 1
+        else:
+            families_in_cluster[family] += 1
+    # Retrieve the most common family (might be even, but should not matter)
+    most_common_family = max(families_in_cluster, key=families_in_cluster.get)
+    files_in_most_common = families_in_cluster[most_common_family]
+    #num_in_other_families = cluster_size - files_in_most_common
+    cluster_purity = files_in_most_common / cluster_size
+    return cluster_purity, cluster_size, most_common_family, files_in_most_common
+
+def analyse_cluster(data):
+    global files
+    test = files.copy()
+    for key in data.keys():
+        cluster_purity, cluster_size, most_common_family, files_in_most_common = get_purity(data[key])
+        if cluster_purity <= 0.8 and cluster_size >= 10:
+            print("Cluster for key: " + str(key))
+            print("Cluster purity: " + str(cluster_purity))
+            print("Cluster size: " + str(cluster_size))
+            print("Most common family: " + most_common_family)
+            print("Files in cluster: ")
+            for sha256 in data[key]:
+                print(sha256)
+            
+            print("Entering interactive mode. Press Ctrl+D to return to script.")
+            import code
+            code.interact(local=locals())
+
+def analyse_clusters():
+    return None # TODO remove
+    print("Analysing imphash clusters: ")
+    analyse_cluster(imphash_clusters)
+    print("Analysing icon clusters: ")
+    analyse_cluster(icon_clusters)
+    print("Analysing resource clusters")
+    analyse_cluster(resource_clusters)
+    print("Analysing tlsh clusters")
+    analyse_cluster(tlsh_clusters)
 
 def write_result_to_files():
     """
@@ -232,7 +265,9 @@ with open('pickles/union_clusters.pkl', 'rb') as picklefile:
 
 
 # Cluster by using union on other clusters
-create_final_clusters()
+analyse_union_clusters()
+
+analyse_clusters()
 
 # Write results to files
 write_result_to_files()

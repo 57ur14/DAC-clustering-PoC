@@ -89,12 +89,15 @@ def imphash_cluster(fileinfo):
     or None if the file does not fit in any union cluster.
     """
     if fileinfo['imphash'] in imphash_clusters:
-        # Add to existing cluster if possible
-        imphash_clusters[fileinfo['imphash']].add(fileinfo['sha256'])
-        # Add to the same union cluster as the first file in the imphash cluster
-        for sha256 in imphash_clusters[fileinfo['imphash']]:
-            # Retrieve first item in set
-            return files[sha256]['union_cluster']
+        if not_bad_cluster(imphash_clusters[fileinfo['imphash']]):
+            # Add to existing cluster if possible
+            imphash_clusters[fileinfo['imphash']].add(fileinfo['sha256'])
+            # Add to the same union cluster as the first file in the imphash cluster
+            for sha256 in imphash_clusters[fileinfo['imphash']]:
+                # Retrieve first item in set
+                return files[sha256]['union_cluster']
+        else:
+            return None
     else:
         # Create new imphash cluster and union cluster if no matching cluster was found
         imphash_clusters[fileinfo['imphash']] = set([fileinfo['sha256']])
@@ -204,7 +207,9 @@ def tlsh_cluster(fileinfo):
                 if score < best_score:
                     best_score = score
                     best_cluster = otherfile['tlsh_cluster']
-    if best_cluster is not None:
+    
+    if (best_cluster is not None 
+            and (score == 0 or not_bad_cluster(tlsh_clusters[best_cluster]):)):
         # If match was found, add to cluster and union cluster 
         # of first file in the tlsh cluster.
         for sha256 in tlsh_clusters[best_cluster]:

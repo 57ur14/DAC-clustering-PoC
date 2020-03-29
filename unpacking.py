@@ -266,6 +266,8 @@ def unpack_file(filepath, fileinfo, pefile_pe):
 
     # is_x86 = pefile_pe.FILE_HEADER.Machine == 0x14c # 0x14c -> Intel 386 or later processors and compatible processors (32-bit PE)
     
+    """
+    # Old unpacking, preferring UPX if possible
     if fileinfo['obfuscation']['type'] == 'packed':
         if 'upx' in fileinfo['obfuscation']['packer']:
             unpacked = unpack_upx(filepath, tmpdir)
@@ -273,6 +275,19 @@ def unpack_file(filepath, fileinfo, pefile_pe):
     if not unpacked and (('packer' in fileinfo['obfuscation'] and fileinfo['obfuscation']['packer'] in clam_supported_packers) or ('protector' in fileinfo['obfuscation'] and fileinfo['obfuscation']['protector'] in clam_supported_packers)):
         # Attempt static unpacking with ClamAV
         unpacked = clam_unpack(filepath, tmpdir)
+    """
+    # New method, using clamav for all supported packers
+    if (('packer' in fileinfo['obfuscation'] and fileinfo['obfuscation']['packer'] in clam_supported_packers) 
+            or ('protector' in fileinfo['obfuscation'] and fileinfo['obfuscation']['protector'] in clam_supported_packers)):
+        # Attempt static unpacking with ClamAV
+        unpacked = clam_unpack(filepath, tmpdir)
+    
+    """
+    # Last method, using clamav for all packed files
+    # Attempt static unpacking with ClamAV
+    unpacked = clam_unpack(filepath, tmpdir)
+    """
+
 
     # Only return files that are not equal to the parent (does not have identical sha256sums):
     return [unpacked_f for unpacked_f in unpacked if  fileinfo['sha256'] != os.path.basename(unpacked_f)]
