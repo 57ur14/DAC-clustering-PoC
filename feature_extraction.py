@@ -40,7 +40,7 @@ def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), 
         Weird behavior in unipacker could otherwise result in infinite recursion.
     """
 
-    if PRINT_PROGRESS == True:
+    if PRINT_PROGRESS:
         if family is None:
             print('Extracting features from ' + fullfilepath)
         else:
@@ -70,7 +70,7 @@ def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), 
             'union_cluster': None
         }
 
-        if incoming == False:
+        if not incoming:
             if unpack_chain is None:
                 # If first file in unpacking chain
                 # Create new unpacking chain with checksum of parent
@@ -89,7 +89,7 @@ def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), 
 
         pe.parse_data_directories()
         fileinfo['pefile_warnings'] = pe.get_warnings()
-        if len(fileinfo['pefile_warnings']) != 0:
+        if fileinfo['pefile_warnings']:
             # Simple method of identifying if file seems suspicious
             # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
             fileinfo['suspicious'] = True
@@ -116,7 +116,7 @@ def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), 
                         # If file could be parsed by pefile
                         # TODO: Could just change contained_pe_files to a dict and use .keys()
                         if (analysis_result['obfuscation']['type'] == 'none'
-                                or analysis_result['unpacks_to_nonpacked_pe'] == True):
+                                or analysis_result['unpacks_to_nonpacked_pe']):
                             # If contained file is not packed or unpacks to a nonpacked file
                             # Mark this file as "unpacks to nonpacked pe"
                             fileinfo['unpacks_to_nonpacked_pe'] = True
@@ -127,7 +127,7 @@ def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), 
                     # simply add a hash of the unpacked file to "contained resources"
                     fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
             
-            if CLUSTER_PACKED_FILES == True:
+            if CLUSTER_PACKED_FILES:
                 # If one should extract certain features without regard
                 # to the file being packed, do so
                 fileinfo['imphash'] = get_imphash(pe)

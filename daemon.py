@@ -39,7 +39,7 @@ def sigint_handler(signum, frame):
     continue_working = False
 
 def perform_clustering():
-    if START_OVER == False:
+    if not START_OVER:
         clustering.load_from_pickles()
 
     # Connect to queue
@@ -53,7 +53,7 @@ def perform_clustering():
 
     # Start working on elements in queue
     global continue_working
-    while continue_working == True:
+    while continue_working:
         try:
             file_to_cluster = cluster_queue.get(timeout=QUEUE_TIMEOUT)
         except EOFError:
@@ -61,14 +61,14 @@ def perform_clustering():
             break
         except queue.Empty:
             # Stop if queue is empty and SIGINT has been sent
-            if continue_working == True:
+            if continue_working:
                 print("Waiting for files to cluster")
                 continue
             else:
                 break
         else:
             if file_to_cluster['sha256'] in clustering.files.keys():
-                if PRINT_PROGRESS == True:
+                if PRINT_PROGRESS:
                     print("Merging file with existing information  " + file_to_cluster['sha256'])
                 # If file has been received and clustered before
                 # Merge new data into the existing data.
@@ -81,7 +81,7 @@ def perform_clustering():
                     # Update "unpacks_from" since it might be contained in multiple different binaries
                     current_file['unpacks_from'].update(file_to_cluster['unpacks_from'])
             else:
-                if PRINT_PROGRESS == True:
+                if PRINT_PROGRESS:
                     print("Clustering file " + file_to_cluster['sha256'])
                 clustering.files[file_to_cluster['sha256']] = file_to_cluster
                 clustering.cluster_file(file_to_cluster)   

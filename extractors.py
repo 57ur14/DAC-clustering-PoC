@@ -53,7 +53,7 @@ def feature_extraction_worker():
         cluster_queue = cluster_manager.get_queue()
 
         global continue_working
-        while continue_working == True:
+        while continue_working:
             try:
                 file_to_cluster = extraction_queue.get(timeout=QUEUE_TIMEOUT)
             except EOFError:
@@ -62,7 +62,7 @@ def feature_extraction_worker():
             except queue.Empty:
                 """
                 # Stop if queue is empty and SIGINT has been sent
-                if continue_working == True:
+                if continue_working:
                     print("Waiting for files to extract")
                     continue
                 else:

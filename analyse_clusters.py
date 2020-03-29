@@ -59,8 +59,8 @@ def create_final_clusters():
             f2 = cluster.pop()
             if (files[f1]['unpacks_from'] == f2 
                     or files[f2]['unpacks_from'] == f1
-                    or files[f1]['incoming'] == False
-                    or files[f2]['incoming'] == False):
+                    or not files[f1]['incoming']
+                    or not files[f2]['incoming']):
                 nonclustered.add(f1)
                 nonclustered.add(f2)
                 files[f1]['union_cluster'] = None
@@ -72,7 +72,7 @@ def create_final_clusters():
             # Check if the cluster contains at least 2 files that are in "incoming_files"
             number_of_incoming_files_in_cluster = 0
             for sha256 in cluster:
-                if files[sha256]['incoming'] == True:
+                if files[sha256]['incoming']:
                     number_of_incoming_files_in_cluster += 1
             if number_of_incoming_files_in_cluster < 2:
                 # Remove cluster if less than 2 files were incoming
@@ -85,7 +85,7 @@ def create_final_clusters():
                 stats['number_of_good_clusters'] += 1
     
     for fileinfo in files.values():
-        if fileinfo['incoming'] == True:
+        if fileinfo['incoming']:
             # Gather info in all files that were incoming 
             # (and not unpacked from another PE)
 
@@ -96,12 +96,12 @@ def create_final_clusters():
                 # Count as an obfuscated incoming file if packed
                 stats['obfuscated_incoming_pe_files'] += 1
 
-                if (fileinfo['unpacks_to_nonpacked_pe'] == True
+                if (fileinfo['unpacks_to_nonpacked_pe']
                         or fileinfo['contained_resources']):
                     # If incoming, packed file was unpacked to nonpacked
                     # pe or a resource, count as successfully unpacked
                     stats['successfully_unpacked_incoming'] += 1
-            if fileinfo['union_cluster'] != None:
+            if fileinfo['union_cluster'] is not None:
                 # Successfully clustered if in a cluster
                 stats['successfully_clustered_incoming'] += 1
             else:
@@ -117,8 +117,8 @@ def create_final_clusters():
     num_pure_clusters = 0
 
     for cluster in union_clusters:
-        if len(cluster) == 0:
-            continue
+        if not cluster:
+            continue        # Skip if cluster does not contain any files
 
         num_real_clusters += 1
         families_in_cluster = {}
@@ -193,10 +193,10 @@ def write_result_to_files():
 
     with open('results/union_clusters.txt', 'w') as outfile:
         for cluster in union_clusters:
-            if len(cluster) == 0:
+            if not cluster:
                 continue                # Skip clusters with no files
             for file_checksum in cluster:
-                if files[file_checksum]['incoming'] == True:
+                if files[file_checksum]['incoming']:
                     outfile.write("+")  # Incoming file clustered
                 else:
                     outfile.write("-")  # Unpacked file, can be ignored
@@ -206,8 +206,8 @@ def write_result_to_files():
     with open('results/nonclustered.txt', 'w') as outfile:
         for fileinfo in files.values():
             # Output list of files that are alone in a cluster or not in any cluster
-            if fileinfo['union_cluster'] == None:
-                if fileinfo['incoming'] == True:
+            if fileinfo['union_cluster'] is None:
+                if fileinfo['incoming']:
                     outfile.write("-")  # Incoming file not clustered (failure)
                 else:
                     outfile.write("+")  # New file (unpacked from other, can be ignored)

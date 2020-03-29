@@ -39,27 +39,27 @@ def cluster_file(fileinfo):
     # TODO: Add checks if file already has been added to union cluster?
     # Is this possible? Don't know; Should check
 
-    if len(fileinfo['contained_pe_files']) != 0:
+    if fileinfo['contained_pe_files']:
         # If file contained another file and it could be clustered 
         # based on a child, cluster based on child
         union_cluster_index = cluster_on_contained_pe(fileinfo)
 
     if (union_cluster_index is None
-            and (fileinfo['obfuscation']['type'] == 'none' or CLUSTER_PACKED_FILES == True)
+            and (fileinfo['obfuscation']['type'] == 'none' or CLUSTER_PACKED_FILES)
             and fileinfo['imphash'] is not None
-            and CLUSTER_WITH_IMPHASH == True):
+            and CLUSTER_WITH_IMPHASH):
         # Cluster using imphash if imphash is present 
         # and it is not obfuscated (fast)
         union_cluster_index = imphash_cluster(fileinfo)
     if (union_cluster_index is None
-            and len(fileinfo['contained_resources']) != 0
-            and CLUSTER_WITH_RESOURCES == True):
+            and fileinfo['contained_resources']
+            and CLUSTER_WITH_RESOURCES):
         # Cluster using contained resources if the
         # files contains any resources
         union_cluster_index = cluster_on_contained_resources(fileinfo)
     if (union_cluster_index is None
             and fileinfo['icon_hash'] is not None
-            and CLUSTER_WITH_ICON == True):
+            and CLUSTER_WITH_ICON):
         # Cluster using a hash of the icon - fast and should be 
         # suitable for both packed and non-packed samples 
         # (but slightly unaccurate)
@@ -70,8 +70,8 @@ def cluster_file(fileinfo):
         # the fast methods 
         union_clusters[union_cluster_index].add(fileinfo['sha256'])
         fileinfo['union_cluster'] = union_cluster_index
-    elif ((CLUSTER_PACKED_FILES == True or fileinfo['obfuscation']['type'] == 'none')
-            and CLUSTER_WITH_TLSH == True):
+    elif ((CLUSTER_PACKED_FILES or fileinfo['obfuscation']['type'] == 'none')
+            and CLUSTER_WITH_TLSH):
         # Cluster with TLSH if other features were not suitable, but TLSH is
         # Last resort
         tlsh_cluster(fileinfo)
@@ -160,7 +160,7 @@ def cluster_on_contained_resources(fileinfo):
         else:
             resource_clusters[resource_hash] = set([fileinfo['sha256']])
 
-    if len(union_cluster_of_files) != 0:
+    if union_cluster_of_files:
         # Find the most common union cluster among
         # the files in shared resource clusters
         return Counter(union_cluster_of_files).most_common(1)[0][0]
@@ -253,7 +253,7 @@ def not_bad_cluster(fileset):
 
     for sha256 in fileset:
         fileinfo = files[sha256]
-        if fileinfo['training'] == True:
+        if fileinfo['training']:
             total_training_files += 1
             family = fileinfo['family']
             if family in families.keys():

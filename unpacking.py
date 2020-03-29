@@ -6,7 +6,6 @@
 # * diec - https://github.com/horsicq/Detect-It-Easy (must be installed and added to path manually)
 # * clamav
 # * libclamunrar9
-# * unattended-unipacker - https://github.com/ntnu-rgb/unattended-unipacker
 # * upx
 
 import configparser
@@ -24,8 +23,6 @@ import requests
 config = configparser.ConfigParser()
 config.read('config.ini')
 unpack_directory = config.get('clustering', 'unpacking_base_directory')
-static_unpack_directory = unpack_directory + 'static/'
-generic_unpack_directory = unpack_directory + 'generic/'
 
 packer_sections = {
     '.aspack': 'aspack',
@@ -136,21 +133,9 @@ clam_supported_packers = [
     'y0da protector'
 ]
 
-unipack_supported_packers = [
-    'aspack',
-    'fsg',
-    'mew',
-    'mpress',
-    'petite',
-    'upx',
-    'yzpack'
-]
-
-# Create necessary directories if they do not exist
-if not os.path.exists(generic_unpack_directory):
-    os.makedirs(generic_unpack_directory)
-if not os.path.exists(static_unpack_directory):
-    os.makedirs(static_unpack_directory)
+# Create necessary directory if it does not exist
+if not os.path.exists(unpack_directory):
+    os.makedirs(unpack_directory)
 
 def detect_obfuscation(filepath, pefile_pe, pefile_warnings):
     """
@@ -285,13 +270,9 @@ def unpack_file(filepath, fileinfo, pefile_pe):
         if 'upx' in fileinfo['obfuscation']['packer']:
             unpacked = unpack_upx(filepath, tmpdir)
         
-    if len(unpacked) == 0 and (('packer' in fileinfo['obfuscation'] and fileinfo['obfuscation']['packer'] in clam_supported_packers) or ('protector' in fileinfo['obfuscation'] and fileinfo['obfuscation']['protector'] in clam_supported_packers)):
+    if not unpacked and (('packer' in fileinfo['obfuscation'] and fileinfo['obfuscation']['packer'] in clam_supported_packers) or ('protector' in fileinfo['obfuscation'] and fileinfo['obfuscation']['protector'] in clam_supported_packers)):
         # Attempt static unpacking with ClamAV
         unpacked = clam_unpack(filepath, tmpdir)
-
-    if len(unpacked) == 0 and 'packer' in fileinfo['obfuscation'] and fileinfo['obfuscation']['packer'] in unipack_supported_packers:
-        # Attempt to generic unpacking with unipacker
-        unpacked = unipack(filepath, tmpdir)        
 
     # Only return files that are not equal to the parent (does not have identical sha256sums):
     return [unpacked_f for unpacked_f in unpacked if  fileinfo['sha256'] != os.path.basename(unpacked_f)]
@@ -317,43 +298,9 @@ def unpack_upx(filepath, tmpdir):
         return unpack_upx(filepath, tmpdir)
     else:
         tmp_path, newfilename = rename_to_sha256(tmp_path)
-        newpath = os.path.join(static_unpack_directory, newfilename)
+        newpath = os.path.join(unpack_directory, newfilename)
         shutil.move(tmp_path, newpath)      # Move file to directory of unpacked files
         return [newpath]                    # Return new path of the unpacked file if successful
-
-def unipack(filepath, tmpdir):
-    """
-    Attempt to unpack a file at a given path with unipack.
-    Emulates execution over a maximum of 5 seconds in an attempt to unpack PE-files that are packed with "simple" packers.
-    Returns a list that can either be empty (could not unpack) or contain a filepath to a file that was unpacked.
-    Dependencies:
-    * unattended-unipacker [https://github.com/ntnu-rgb/unattended-unipacker]
-    """
-    try:
-        subprocess.run(
-            ["unipacker", '-d', generic_unpack_directory, filepath], 
-            stdin = subprocess.PIPE, 
-            stdout = subprocess.PIPE, 
-            stderr = subprocess.PIPE, 
-            check=True, 
-            timeout=5
-        )                       # If it hasn't finished in 5 seconds, it will likely never succeed
-    except subprocess.TimeoutExpired:
-        return []               # Timeout reached, skip file
-    except subprocess.CalledProcessError:
-        return []               # unipacker crashed, skip file
-    except OSError as err:
-        print(err)
-        print("Sleeping 5 minutes before trying again")
-        time.sleep(300)
-        return unipack(filepath, tmpdir)
-    else: # If Unipacker returned successfully
-        newfilepath = generic_unpack_directory + 'unpacked_' + os.path.basename(filepath)
-        if os.path.exists(newfilepath):
-            # Return path to new file if it was unpacked
-            return [rename_to_sha256(newfilepath)[0]]
-        else:
-            return []           # Skip file if unpacked file did not exist
 
 def clam_unpack(filepath, tmpdir):
     """
@@ -429,7 +376,7 @@ def clam_unpack(filepath, tmpdir):
         for root, dirs, files in os.walk(tmpdir, topdown=False):
             for filename in files:
                 oldpath, newfilename = rename_to_sha256(os.path.join(root, filename))
-                newpath = os.path.join(static_unpack_directory, newfilename)
+                newpath = os.path.join(unpack_directory, newfilename)
                 shutil.move(oldpath, newpath)
                 unpacked.append(newpath)
             for dirname in dirs:
