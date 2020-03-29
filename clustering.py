@@ -209,7 +209,7 @@ def tlsh_cluster(fileinfo):
                     best_cluster = otherfile['tlsh_cluster']
     
     if (best_cluster is not None 
-            and (score == 0 or not_bad_cluster(tlsh_clusters[best_cluster]):)):
+            and (score == 0 or not_bad_cluster(tlsh_clusters[best_cluster]))):
         # If match was found, add to cluster and union cluster 
         # of first file in the tlsh cluster.
         for sha256 in tlsh_clusters[best_cluster]:
