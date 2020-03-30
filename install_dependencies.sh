@@ -31,12 +31,6 @@ git clone https://github.com/ntnu-rgb/pefile-extract-icon.git
 cd pefile-extract-icon
 sudo python3 setup.py install
 
-cd $HOME/tools
-echo "Installing Unattended unipacker python module"
-git clone https://github.com/ntnu-rgb/unattended-unipacker.git
-cd unattended-unipacker
-sudo python3 setup.py install
-
 echo "Installing ClamAV"
 sudo service clamav-freshclam stop
 sudo systemctl disable clamav-freshclam
