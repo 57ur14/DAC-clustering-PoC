@@ -70,15 +70,16 @@ def feature_extraction_worker():
         job_queue = job_manager.get_queue()
         done_queue = done_manager.get_queue()
 
-        while True:
+        continue_working = True
+        while continue_working:
             try:
                 file_to_cluster = job_queue.get(timeout=QUEUE_TIMEOUT)
             except EOFError:
                 print("Queue not available. Please check if the feature extraction queue manager is still running.")
-                break
+                continue_working = False
             except queue.Empty:
                 # Stop when queue is empty
-                break
+                continue_working = False
             else:
                 # TODO: fiks TRAINING:
                 TRAINING = True
@@ -121,16 +122,17 @@ def collect_features():
         raise SystemExit
     done_queue = done_manager.get_queue()
 
-    while True:
+    continue_working = True
+    while continue_working:
         try:
             # Retrieve file metadata from queue
             fileinfo = done_queue.get(timeout=QUEUE_TIMEOUT)
         except EOFError:
             print("Queue not available. Please check if the queue manager is still running.")
-            break
+            continue_working = False
         except queue.Empty:
             print("Done queue empty. Stopping collection.")
-            break
+            continue_working = False
         else:
             # If file was successfully retrieved from queue
             if fileinfo['sha256'] in files.keys():
