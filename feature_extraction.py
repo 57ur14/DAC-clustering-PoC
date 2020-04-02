@@ -23,21 +23,22 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
-MAX_UNPACK_RECURSION = config.getint('feature_extraction', 'max_unpack_recursion')
-DETECT_IT_EASY_ONLY = config.getint('feature_extraction', 'detect_it_easy_only')
+CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 
-def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), incoming=False, unpack_chain=None):
+def analyse_file(fullfilepath, unpacks_from=None, unpacking_set=set(), incoming=False, family=None, training=False):
     """
     Analyse a pe-file at the given filepath, add to list of files and return sha256sum
     Can also specify the family the pe belongs to (if known) and the 
     sha256sum of the file that that unpacked the incoming file.
 
-    @family String / None: If it is None, it indicates that the family is unknown.
-    @training Boolean: Indicates if the file is part of the "training" where the clustering should know the family
-    @incoming Boolean: Indicates if the file was really incoming to feature 
+    Paramters:
+    fullfilepath String: The full path to the file that should be analysed.
+    unpacks_from String: The sha256 checksum of the file this file was unpacked from (or none if this was not unpacked from another file)
+    unpacking_set Set: A set of sha256 checkums of the files previously unpacked in the "unpacking chain". Allows detection of loops.
+    incoming Boolean: Indicates if the file was really incoming to feature 
         extraction or just unpacked from another PE.
-    @unpack_chain set: Holds a list of "parent" PE-files that has been part of the unpacking. 
-        Weird behavior in unipacker could otherwise result in infinite recursion.
+    family String / None: If it is None, it indicates that the family is unknown.
+    training Boolean: Indicates if the file is part of the "training" where the clustering should know the family
     """
 
     if PRINT_PROGRESS:
@@ -70,16 +71,14 @@ def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), 
             'union_cluster': None
         }
 
-        if not incoming:
-            if unpack_chain is None:
-                # If first file in unpacking chain
-                # Create new unpacking chain with checksum of parent
-                unpack_chain = unpacks_from.copy()
-            elif fileinfo['sha256'] in unpack_chain:
-                # Abort if this the unpacking is looping
-                return None
-            # Add checksum of this file to unpacking chain
-            unpack_chain.add(fileinfo['sha256'])
+        if fileinfo['sha256'] in unpacking_set:
+            # Abort if file already is part of the 
+            # unpacking chain to avoid infinite recursion.
+            return None
+
+        # Add to unpacking chain to allow loop detection
+        unpacking_set.add(fileinfo['sha256'])
+
         try:
             pe = pefile.PE(data=rawfile)
         except Exception:
@@ -94,28 +93,19 @@ def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), 
             # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
             fileinfo['suspicious'] = True
 
-        if DETECT_IT_EASY_ONLY:
-            fileinfo['obfuscation'] = unpacking.detect_obfuscation_by_diec(fullfilepath)
-        else:
-            fileinfo['obfuscation'] = unpacking.detect_obfuscation(fullfilepath, pe, fileinfo['pefile_warnings'])
+        fileinfo['obfuscation'] = unpacking.detect_obfuscation_by_diec(fullfilepath)
 
-        if fileinfo['obfuscation']['type'] != 'none':   # If file seems to be packed
-            # Attempt to unpack the packed file
-            unpacked = unpacking.unpack_file(fullfilepath, fileinfo, pe)
-            
-            for unpacked_file in unpacked:              # For all unpacked files
+        # Attempt to unpack the packed file regardless of detected obfuscation
+        unpacked = unpacking.unpack_file(fullfilepath, fileinfo['sha256'])
+
+        for unpacked_file in unpacked:              # For all unpacked files
                 if filetype.guess_mime(unpacked_file) == 'application/x-msdownload':
                     # Check if the file is an "exe" (pe file) and analyse it if so
-                    if (unpack_chain is not None 
-                            and len(unpack_chain) >= MAX_UNPACK_RECURSION):
-                        # Skip unpacking if this file has been recursively unpacking 
-                        # more than a specified number of times.
-                        continue
-                    analysis_result = analyse_file(unpacked_file, family=family, unpacks_from=set([fileinfo['sha256']]), unpack_chain=unpack_chain)
+                    analysis_result = analyse_file(unpacked_file, unpacks_from=fileinfo['sha256'], unpacking_set=unpacking_set, family=family)
                     if analysis_result is not None:
                         # If file could be parsed by pefile
                         # TODO: Could just change contained_pe_files to a dict and use .keys()
-                        if (analysis_result['obfuscation']['type'] == 'none'
+                        if (analysis_result['obfuscation'] is None
                                 or analysis_result['unpacks_to_nonpacked_pe']):
                             # If contained file is not packed or unpacks to a nonpacked file
                             # Mark this file as "unpacks to nonpacked pe"
@@ -127,17 +117,21 @@ def analyse_file(fullfilepath, family=None, training=False, unpacks_from=set(), 
                     # simply add a hash of the unpacked file to "contained resources"
                     fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
             
+        if fileinfo['obfuscation'] is not None or unpacked:
+            # If file seems to be packed
             if CLUSTER_PACKED_FILES:
-                # If one should extract certain features without regard
-                # to the file being packed, do so
+                # If one should extract certain features without 
+                # regard to the file being packed, do so
                 fileinfo['imphash'] = get_imphash(pe)
                 fileinfo['tlsh'] = tlsh.hash(rawfile)
         else:
             # Extract imphash and tlsh if file is not packed
             fileinfo['imphash'] = get_imphash(pe)
             fileinfo['tlsh'] = tlsh.hash(rawfile)
-        # Extract icon regardless of whether the file is packed or not
-        fileinfo['icon_hash'] = get_icon_hash(pe)
+
+        if CLUSTER_WITH_ICON:
+            # Extract icon if supposed to use icon
+            fileinfo['icon_hash'] = get_icon_hash(pe)
 
         return fileinfo
     return None                               # Return None on failure

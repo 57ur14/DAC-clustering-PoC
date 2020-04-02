@@ -74,7 +74,9 @@ def analyse_file(fullfilepath, family=None, incoming=False, unpacks_from=set(), 
             fileinfo['suspicious'] = True
 
         fileinfo['obfuscation'] = unpacking.detect_obfuscation_by_diec(fullfilepath)
-        if fileinfo['obfuscation']['type'] != 'none':   # If file seems to be packed
+        if True:
+            # Attempt unpacking all files
+            #if fileinfo['obfuscation']['type'] != 'none':   # If file seems to be packed
             # Attempt to unpack the packed file
             unpacked = []
             if unpack_method == 'all':
@@ -98,7 +100,7 @@ def analyse_file(fullfilepath, family=None, incoming=False, unpacks_from=set(), 
             elif unpack_method == 'none':
                 pass # Don't do anything. Leave unpacked empty
 
-            if unpacked:
+            if incoming and unpacked:
                 incoming_unpacked += 1
 
             for unpacked_file in unpacked:              # For all unpacked files
@@ -144,8 +146,8 @@ with open('ijcnn_filepaths_randomised.txt') as infile:
         method = 'all'
         analyse_file(filepath, family=family, incoming=True, unpack_method=method)
 
-    print("Total unpacked files: " + str(total_unpacked_pe))
+    print("Total unpacked pe files: " + str(total_unpacked_pe))
     print("Total unpacked resources: " + str(total_unpacked_resources))
-    print("Incoming files that could be unpacked: " + str(incoming_unpacked))
+    print("Incoming files that could be unpacked to anything: " + str(incoming_unpacked))
     print("Incoming files that unpack to a non-packed PE: " + str(incoming_that_unpack_to_nonpacked_pe))
     print("Incoming files that unpack to at least one non-PE file (resource): " + str(incoming_that_unpack_to_resource))

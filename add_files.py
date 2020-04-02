@@ -9,7 +9,7 @@ from multiprocessing.managers import BaseManager
 config = configparser.ConfigParser()
 config.read('config.ini')
 QUEUE_MANAGER_IP = config.get('queue_managers', 'ip')
-EXTRACTION_MANAGER_PORT = config.getint('queue_managers', 'extraction_port')
+JOB_MANAGER_PORT = config.getint('queue_managers', 'job_port')
 QUEUE_MANAGER_KEY = config.get('queue_managers', 'key').encode('utf-8')
 
 # Define queue manager class
@@ -17,23 +17,6 @@ class QueueManager(BaseManager):
     pass
 QueueManager.register('get_queue')
 
-def add_files_for_extraction(file_list):
-    """
-    Add files to the queue of files that should have their 
-    features extracted and their data sent to clustering
-    """
-
-    # Connect to feature extraction queue
-    extraction_manager = QueueManager(address=(QUEUE_MANAGER_IP, EXTRACTION_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
-    try:
-        extraction_manager.connect()
-    except:
-        print("Cannot connect to queue manager. Make sure the daemon is running and the configuration is correct.")
-    else:
-        extraction_queue = extraction_manager.get_queue()
-        for item in file_list:
-            # Send all files in the list to the feature extraction queue
-            extraction_queue.put(item)
 
 # Parse arguments
 parser = argparse.ArgumentParser(description='Process a file; Extract features and send to clustering.')
