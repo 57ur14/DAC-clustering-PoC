@@ -121,7 +121,6 @@ def collect_features():
         raise SystemExit
     done_queue = done_manager.get_queue()
 
-    timeouts_reached = 0
     while True:
         try:
             # Retrieve file metadata from queue
@@ -130,14 +129,10 @@ def collect_features():
             print("Queue not available. Please check if the queue manager is still running.")
             break
         except queue.Empty:
-            timeouts_reached += 1
-            if timeouts_reached == (600 / QUEUE_TIMEOUT):
-                # Stop if no input for 1 minute
-                print("Timeout reached. Exiting.")
-                break
+            print("Done queue empty. Stopping collection.")
+            break
         else:
             # If file was successfully retrieved from queue
-            timeouts_reached = 0
             if fileinfo['sha256'] in files.keys():
                 # If file has been received and clustered before
                 # Merge new data into the existing data.
