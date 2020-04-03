@@ -8,14 +8,15 @@ import pickle
 config = configparser.ConfigParser()
 config.read('config.ini')
 PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
+CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
-CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
+CLUSTER_WITH_CONTAINED_PE = config.getboolean('clustering', 'cluster_with_contained_pe')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 
+
 files = {}                  # Dictionary of of files
-non_parsable_files = {}     # Dictionary of files that could not be parsed
-nonclustered = set()        # Set of files not belonging to a cluster
+clusters = {}               # Dictionary of clusters
 stats = {
     'number_of_incoming_pe': 0,
     'unpacked_pe_files': 0,
@@ -24,6 +25,7 @@ stats = {
     'total_obfuscated_pe_files': 0,
     'obfuscated_unpacked_pe_files': 0,
     'obfuscated_incoming_pe_files': 0,
+    'number_of_fast_clustered_files': 0,
     'number_of_good_clusters': 0,
     'total_clustered_files': 0,
     'mean_cluster_size': 0,
@@ -32,116 +34,53 @@ stats = {
     'share_successful': 0
 }                           # Dictionary to store statistics of the clustering
 
-imphash_clusters = {}       # Dictionary of clusters where files have equal import hashes
-icon_clusters = {}          # Dictionary of clusters where files have equal icon hashes
-tlsh_clusters = {}      # Dictionary of tlsh clusters, identified by tlsh hash of root file
-union_clusters = []
-
-def analyse_union_clusters():
-    """
-    TODO: Passer dette til online clustering?
-    Må kanskje heller legge mye av dette inn i "cluster" funksjonen?
-    Og hvis filen er pakket kjøre clustering på "barna" først, for å så sjekke 
-    om barna er i en cluster (og i såfall legge forelderen dit)
-    """
-
-    # Filter out certain files that are in very small clusters
-    # TODO: Filter clutsers that only contain 1 or 0 "incoming_files"?
-    for cluster in union_clusters:
-        if len(cluster) == 1:                   # Move files to "nonclustered"
-            sha256 = cluster.pop()              # if they are alone in a cluster
-            nonclustered.add(sha256)
-            files[sha256]['union_cluster'] = None
-        elif len(cluster) == 2:
-            # Move files to "nonclustered" if one file was unpacked from the 
-            # other file, or less than 2 files were originally incoming files
-            f1 = cluster.pop()
-            f2 = cluster.pop()
-            if (files[f1]['unpacks_from'] == f2 
-                    or files[f2]['unpacks_from'] == f1
-                    or not files[f1]['incoming']
-                    or not files[f2]['incoming']):
-                nonclustered.add(f1)
-                nonclustered.add(f2)
-                files[f1]['union_cluster'] = None
-                files[f2]['union_cluster'] = None
-            else:
-                cluster.add(f1)
-                cluster.add(f2)
-        else:
-            # Check if the cluster contains at least 2 files that are in "incoming_files"
-            number_of_incoming_files_in_cluster = 0
-            for sha256 in cluster:
-                if files[sha256]['incoming']:
-                    number_of_incoming_files_in_cluster += 1
-            if number_of_incoming_files_in_cluster < 2:
-                # Remove cluster if less than 2 files were incoming
-                for sha256 in cluster:
-                    nonclustered.add(sha256)
-                    files[sha256]['union_cluster'] = None
-                cluster.clear()
-            else:
-                stats['total_clustered_files'] += len(cluster)
-                stats['number_of_good_clusters'] += 1
-    
+def analyse_files():
     for fileinfo in files.values():
+        stats['total_pe_files'] += 1
+
+        if fileinfo['fast_clustered']:
+            stats['number_of_fast_clustered_files'] += 1
+
         if fileinfo['incoming']:
-            # Gather info in all files that were incoming 
-            # (and not unpacked from another PE)
-
-            # Count as incoming pe
             stats['number_of_incoming_pe'] += 1
-
-            if fileinfo['obfuscation']['type'] != 'none':
-                # Count as an obfuscated incoming file if packed
+            if fileinfo['unpacks_to_nonpacked_pe']:
+                stats['successfully_unpacked_incoming'] += 1
+            if fileinfo['obfuscation'] is not None:
                 stats['obfuscated_incoming_pe_files'] += 1
+        else:
+            # If not incoming
+            if fileinfo['obfuscation'] is not None:
+                stats['obfuscated_unpacked_pe_files'] += 1
 
-                if (fileinfo['unpacks_to_nonpacked_pe']
-                        or fileinfo['contained_resources']):
-                    # If incoming, packed file was unpacked to nonpacked
-                    # pe or a resource, count as successfully unpacked
-                    stats['successfully_unpacked_incoming'] += 1
-            if fileinfo['union_cluster'] is not None:
-                # Successfully clustered if in a cluster
-                stats['successfully_clustered_incoming'] += 1
-            else:
-                # Unsuccessful if not in a cluster
-                stats['not_clustered_incoming'] += 1
-        elif fileinfo['obfuscation']['type'] != 'none':
-            # If not incomung but obfuscated, count as obfuscated unpacked
-            stats['obfuscated_unpacked_pe_files'] += 1
 
-    # Identify cluster "purity"
+def analyse_clusters():
+    # Analyse imphash clusters
+    stats['imphash_mean_purity'], stats['imphash_mean_size'] = analyse_feature_clusters(clusters['imphash_clusters'])
+
+    # Analyse icon clusters
+    stats['icon_mean_purity'], stats['icon_mean_size'] = analyse_feature_clusters(clusters['icon_clusters'])
+
+    # Analyse resource clusters
+    stats['resource_mean_purity'], stats['resource_mean_size'] = analyse_feature_clusters(clusters['resource_clusters'])
+
+    # Analyse tlsh clusters
+    stats['tlsh_mean_purity'], stats['tlsh_mean_size'] = analyse_feature_clusters(clusters['tlsh_clusters'])
+
+
+def analyse_feature_clusters(clusters):
+    number_of_clusters = len(clusters)
     mean_purity = 0
-    num_real_clusters = 0
-    num_pure_clusters = 0
-    
-    for cluster in union_clusters:
-        if not cluster:
-            continue        # Skip if cluster does not contain any files
-
-        num_real_clusters += 1
-        cluster_purity, cluster_size, most_common_family, files_in_most_common = get_purity(cluster)
+    mean_size = 0
+    for cluster in clusters.values():
+        cluster_purity, cluster_size, most_common_family, files_in_most_common = analyse_file_cluster(cluster['items'])
         mean_purity += cluster_purity
-        if cluster_purity == 1:
-            num_pure_clusters += 1
+        mean_size += cluster_size
+    mean_purity = mean_purity / number_of_clusters
+    mean_size = mean_size / number_of_clusters
+    return mean_purity, mean_size
 
-    stats['total_pe_files'] = len(files)
-    stats['unpacked_pe_files'] = stats['total_pe_files'] - stats['number_of_incoming_pe']
-    stats['total_obfuscated_pe_files'] = stats['obfuscated_unpacked_pe_files'] + stats['obfuscated_incoming_pe_files']
-    if stats['number_of_good_clusters'] != 0:
-        stats['mean_cluster_size'] = stats['total_clustered_files'] / stats['number_of_good_clusters']
-    if stats['number_of_incoming_pe'] != 0:
-        stats['share_successful'] = stats['successfully_clustered_incoming'] / stats['number_of_incoming_pe']
-    if num_real_clusters != 0:
-        stats['mean_purity'] = mean_purity / num_real_clusters
-    stats['total_pure_clusters'] = num_pure_clusters
-    stats['total_clusters'] = num_real_clusters
+def analyse_file_cluster(sha256hashes):
 
-    for key, value in stats.items():
-        print(str(key) + ": " + str(value))
-
-def get_purity(sha256hashes):
     families_in_cluster = {}
     cluster_size = len(sha256hashes)
     for sha256 in sha256hashes:
@@ -157,117 +96,21 @@ def get_purity(sha256hashes):
     cluster_purity = files_in_most_common / cluster_size
     return cluster_purity, cluster_size, most_common_family, files_in_most_common
 
-def analyse_cluster(data):
-    global files
-    test = files.copy()
-    for key in data.keys():
-        cluster_purity, cluster_size, most_common_family, files_in_most_common = get_purity(data[key])
-        if cluster_purity <= 0.8 and cluster_size >= 10:
-            print("Cluster for key: " + str(key))
-            print("Cluster purity: " + str(cluster_purity))
-            print("Cluster size: " + str(cluster_size))
-            print("Most common family: " + most_common_family)
-            print("Files in cluster: ")
-            for sha256 in data[key]:
-                print(sha256)
-            
-            print("Entering interactive mode. Press Ctrl+D to return to script.")
-            import code
-            code.interact(local=locals())
+# Write results to pickles to allow further processing
+if not os.path.exists('pickles/files.pkl') or not os.path.exists('pickles/clusters.pkl'):
+    print("Pickles not found. Execute clustering first.")
+    raise SystemExit
 
-def analyse_clusters():
-    return None # TODO remove
-    print("Analysing imphash clusters: ")
-    analyse_cluster(imphash_clusters)
-    print("Analysing icon clusters: ")
-    analyse_cluster(icon_clusters)
-    print("Analysing resource clusters")
-    analyse_cluster(resource_clusters)
-    print("Analysing tlsh clusters")
-    analyse_cluster(tlsh_clusters)
-
-def write_result_to_files():
-    """
-    Write results to files in the results/ directory
-    """
-    try:
-        os.mkdir('results')
-    except FileExistsError:
-        pass
-
-    print("Writing output to the directory results/")
-
-    with open('results/features.txt', 'w') as outfile:
-        for fileinfo in files.values():
-            outfile.write(str(fileinfo) + "\n\n")
-    
-    with open('results/iconhash_cluster.txt', 'w') as outfile:
-        for iconhash in icon_clusters.keys():
-            outfile.write("\n" + str(iconhash) + "\n")
-            for file in icon_clusters[iconhash]:
-                outfile.write(file + "\n")
-
-    with open('results/imphash_cluster.txt', 'w') as outfile:
-        for imphash in imphash_clusters.keys():
-            outfile.write("\n" + imphash + "\n")
-            for file in imphash_clusters[imphash]:
-                outfile.write(file + "\n")
-
-    with open('results/tlsh_cluster.txt' ,'w') as outfile:
-        for root_hash, cluster_files in tlsh_clusters.items():
-            outfile.write("\n" + root_hash + ":\n")
-            for sha256 in cluster_files:
-                outfile.write(sha256 + "\n")
-    
-    # TODO: What happens to files that cannot be parsed?
-    #with open('results/nonparsable.txt', 'w') as outfile:
-    #    for fileinfo in non_parsable_files.values():
-    #        outfile.write(str(fileinfo) + "\n\n")
-
-    with open('results/union_clusters.txt', 'w') as outfile:
-        for cluster in union_clusters:
-            if not cluster:
-                continue                # Skip clusters with no files
-            for file_checksum in cluster:
-                if files[file_checksum]['incoming']:
-                    outfile.write("+")  # Incoming file clustered
-                else:
-                    outfile.write("-")  # Unpacked file, can be ignored
-                outfile.write(file_checksum + ' ' + files[file_checksum]['family'] + ' ' + files[file_checksum]['md5'] + "\n")
-            outfile.write("\n")
-
-    with open('results/nonclustered.txt', 'w') as outfile:
-        for fileinfo in files.values():
-            # Output list of files that are alone in a cluster or not in any cluster
-            if fileinfo['union_cluster'] is None:
-                if fileinfo['incoming']:
-                    outfile.write("-")  # Incoming file not clustered (failure)
-                else:
-                    outfile.write("+")  # New file (unpacked from other, can be ignored)
-                outfile.write(fileinfo['sha256'] + ' ' + fileinfo['family'] + ' ' + fileinfo['md5'] + "\n" )
-
-# Read from pickles
 with open('pickles/files.pkl', 'rb') as picklefile:
     files = pickle.load(picklefile)
-with open('pickles/imphash_clusters.pkl', 'rb') as picklefile:
-    imphash_clusters = pickle.load(picklefile)
-with open('pickles/icon_clusters.pkl', 'rb') as picklefile:
-    icon_clusters = pickle.load(picklefile)
-with open('pickles/resource_clusters.pkl', 'rb') as picklefile:
-    resource_clusters = pickle.load(picklefile)
-with open('pickles/tlsh_clusters.pkl', 'rb') as picklefile:
-    tlsh_clusters = pickle.load(picklefile)
-with open('pickles/union_clusters.pkl', 'rb') as picklefile:
-    union_clusters = pickle.load(picklefile)
-# TODO: What happens with non-parsable files?
-#with open('pickles/feature_extraction/non_parsable_files.pkl', 'rb') as picklefile:
-#    non_parsable_files = pickle.load(picklefile)
+with open('pickles/clusters.pkl', 'rb') as picklefile:
+    clusters = pickle.load(picklefile)
 
-
-# Cluster by using union on other clusters
-analyse_union_clusters()
-
+analyse_files()
 analyse_clusters()
 
-# Write results to files
-write_result_to_files()
+stats['unpacked_pe_files'] = stats['total_pe_files'] - stats['number_of_incoming_pe']
+stats['total_obfuscated_pe_files'] = stats['obfuscated_incoming_pe_files'] + stats['obfuscated_unpacked_pe_files']
+
+for key, value in stats.items():
+    print(str(key) + ": " + str(value))

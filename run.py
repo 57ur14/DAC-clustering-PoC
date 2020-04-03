@@ -159,11 +159,9 @@ def collect_features():
 def cluster_incoming():
     pass
 
-def save_to_pickles(work_type):
+def save_to_pickles():
     """
     Save data to pickles to allow later processing.
-    Saves the "files" variable to disk.
-    If work_type is 'test', the "clusters" variable will be saved as well.
     """
 
     # Write results to pickles to allow further processing
@@ -172,10 +170,8 @@ def save_to_pickles(work_type):
 
     with open('pickles/files.pkl', 'wb') as picklefile:
         pickle.dump(files, picklefile)
-
-    if work_type == 'test':
-        with open('pickles/clusters.pkl', 'wb') as picklefile:
-            pickle.dump(clusters, picklefile)
+    with open('pickles/clusters.pkl', 'wb') as picklefile:
+        pickle.dump(clusters, picklefile)
 
 # If main script (not another thread/process)
 if __name__ == '__main__':
@@ -242,7 +238,6 @@ if __name__ == '__main__':
                 # TODO: Analyse and label clusters
 
                 # Save results to pickles when done working
-                save_to_pickles(work_type)
             elif work_type == 'test':
                 # TODO: Load file / cluster information
 
@@ -250,6 +245,6 @@ if __name__ == '__main__':
 
                 # TODO: Analyse clusters
 
-                save_to_pickles(work_type)
+            save_to_pickles()
 
             print("Main done")

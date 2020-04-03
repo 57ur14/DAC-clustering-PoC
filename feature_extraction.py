@@ -68,7 +68,7 @@ def analyse_file(fullfilepath, unpacks_from=None, unpacking_set=set(), incoming=
             'icon_hash': None,
             'tlsh': None,
             'tlsh_cluster': None,
-            'union_cluster': None
+            'fast_clustered': False
         }
 
         if fileinfo['sha256'] in unpacking_set:
