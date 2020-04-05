@@ -44,6 +44,9 @@ def cluster_files(files, clusters):
                 fast_cluster_on_contained_files(fileinfo, files, clusters)
             if not fileinfo['fast_clustered']:
                 # If still not fast clustered, cluster slowly
+                if fileinfo['incoming']:
+                    while True:
+                        print("Slow clustering an incoming file!")
                 slow_cluster_file(fileinfo, files, clusters)
 
 def fast_cluster_file(fileinfo, clusters):
@@ -106,6 +109,7 @@ def slow_cluster_file(fileinfo, files, clusters):
     # Cluster with slow methods only if not yet clustered
     if CLUSTER_WITH_TLSH and fileinfo['tlsh']:
         cluster_using_tlsh(fileinfo, files, clusters['tlsh_clusters'])
+        fileinfo['slow_clustered'] = True
 
 def cluster_on_contained_resources(fileinfo, resource_clusters):
     """
@@ -192,6 +196,29 @@ def cluster_using_tlsh(fileinfo, files, tlsh_clusters):
                 tlsh_clusters[fileinfo['tlsh']]['items'].add(otherfile['sha256'])
                 otherfile['tlsh_cluster'] = fileinfo['tlsh_cluster']
 
+def label_clusters(files, feature_clusters):
+
+    pass
+
+def analyse_file_cluster(sha256hashes, files):
+
+    families_in_cluster = {}
+    cluster_size = len(sha256hashes)
+    for sha256 in sha256hashes:
+        family = files[sha256]['family']
+        if family not in families_in_cluster.keys():
+            families_in_cluster[family] = 1
+        else:
+            families_in_cluster[family] += 1
+    # Retrieve the most common family (might be even, but should not matter)
+    most_common_family = max(families_in_cluster, key=families_in_cluster.get)
+    files_in_most_common = families_in_cluster[most_common_family]
+    #num_in_other_families = cluster_size - files_in_most_common
+    cluster_purity = files_in_most_common / cluster_size
+    return cluster_purity, cluster_size, most_common_family, files_in_most_common
+
+
+# TODO: Slett?
 def not_bad_cluster(fileset, files):
     """
     Check if a cluster is not bad / unpure.

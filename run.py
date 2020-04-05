@@ -89,10 +89,11 @@ def send_to_done_queue(fileinfo, done_queue):
     """
     Recursively send files to the queue of completed feature extraction jobs
     """
-    for contained_info in fileinfo['contained_pe_fileinfo'].values():
-        send_to_done_queue(contained_info, done_queue)
-    fileinfo.pop('contained_pe_fileinfo')
-    done_queue.put(fileinfo)
+    if fileinfo is not None:
+        for contained_info in fileinfo['contained_pe_fileinfo'].values():
+            send_to_done_queue(contained_info, done_queue)
+        fileinfo.pop('contained_pe_fileinfo')
+        done_queue.put(fileinfo)
 
 def add_files_for_extraction(*file_list):
     """
@@ -111,6 +112,7 @@ def add_files_for_extraction(*file_list):
             job_queue.put(item)
 
 def collect_features():
+    number_of_files = 0
 
     # Connect to queue
     done_manager = QueueManager(address=(QUEUE_MANAGER_IP, DONE_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
@@ -132,6 +134,9 @@ def collect_features():
             print("Done-queue empty. Stopping collection.")
             break
         else:
+            if fileinfo['incoming']:
+                number_of_files += 1
+                print("Processing incoming file number: " + str(number_of_files))
             # If file was successfully retrieved from queue
             if fileinfo['sha256'] in files.keys():
                 # If file has been received and clustered before
@@ -235,7 +240,10 @@ if __name__ == '__main__':
 
                 clustering.cluster_files(files, clusters)
 
-                # TODO: Analyse and label clusters
+                clustering.label_clusters(files, clusters['imphash_clusters'])
+                clustering.label_clusters(files, clusters['icon_clusters'])
+                clustering.label_clusters(files, clusters['resource_clusters'])
+                clustering.label_clusters(files, clusters['tlsh_clusters'])
 
                 # Save results to pickles when done working
             elif work_type == 'test':
