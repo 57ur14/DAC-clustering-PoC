@@ -44,9 +44,6 @@ def cluster_files(files, clusters):
                 fast_cluster_on_contained_files(fileinfo, files, clusters)
             if not fileinfo['fast_clustered']:
                 # If still not fast clustered, cluster slowly
-                if fileinfo['incoming']:
-                    while True:
-                        print("Slow clustering an incoming file!")
                 slow_cluster_file(fileinfo, files, clusters)
 
 def fast_cluster_file(fileinfo, clusters):
