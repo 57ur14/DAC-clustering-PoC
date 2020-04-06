@@ -49,8 +49,6 @@ def analyse_files():
         if fileinfo['slow_clustered']:
             stats['slow_clustered_files'] += 1
         
-        if fileinfo['contained_resources']
-
         if fileinfo['incoming']:
             stats['incoming_pe'] += 1
             if fileinfo['unpacks_to_nonpacked_pe']:
