@@ -163,6 +163,8 @@ def collect_features():
 
 def cluster_incoming():
     pass
+    # TODO: Cluster litt som under training
+    # Men pass på at 
 
 def save_to_pickles():
     """

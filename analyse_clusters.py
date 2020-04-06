@@ -36,7 +36,8 @@ stats = {
     'mean_cluster_size': 0,
     'successfully_clustered_incoming': 0,
     'not_clustered_incoming': 0,
-    'share_successful': 0
+    'share_successful': 0,
+    'resource_clustered_files': 0
 }                           # Dictionary to store statistics of the clustering
 
 def analyse_files():
@@ -47,6 +48,8 @@ def analyse_files():
             stats['fast_clustered_files'] += 1
         if fileinfo['slow_clustered']:
             stats['slow_clustered_files'] += 1
+        
+        if fileinfo['contained_resources']
 
         if fileinfo['incoming']:
             stats['incoming_pe'] += 1
@@ -87,8 +90,12 @@ def analyse_feature_clusters(clusters):
         mean_purity += cluster_purity
         mean_size += cluster_size
         total_files += len(cluster['items'])
-    mean_purity = mean_purity / number_of_clusters
-    mean_size = mean_size / number_of_clusters
+    if number_of_clusters != 0:
+        mean_purity = mean_purity / number_of_clusters
+        mean_size = mean_size / number_of_clusters
+    else:
+        mean_purity = 0
+        mean_size = 0
     return mean_purity, mean_size, total_files, number_of_clusters
 
 
