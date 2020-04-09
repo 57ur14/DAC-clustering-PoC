@@ -242,10 +242,7 @@ if __name__ == '__main__':
 
                 clustering.cluster_files(files, clusters)
 
-                clustering.label_clusters(files, clusters['imphash_clusters'])
-                clustering.label_clusters(files, clusters['icon_clusters'])
-                clustering.label_clusters(files, clusters['resource_clusters'])
-                clustering.label_clusters(files, clusters['tlsh_clusters'])
+                clustering.label_clusters(files, clusters)
 
                 # Save results to pickles when done working
             elif work_type == 'test':

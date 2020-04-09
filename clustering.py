@@ -41,7 +41,7 @@ def cluster_files(files, clusters):
             # If the file has not been clustered with fast properties
             if CLUSTER_WITH_CONTAINED_PE and fileinfo['contained_pe_files']:
                 # Attempt to cluster the file on contained PE files
-                fast_cluster_on_contained_files(fileinfo, files, clusters)
+                cluster_on_contained_files(fileinfo, files, clusters)
             if not fileinfo['fast_clustered']:
                 # If still not fast clustered, cluster slowly
                 slow_cluster_file(fileinfo, files, clusters)
@@ -69,7 +69,7 @@ def fast_cluster_file(fileinfo, clusters):
             cluster_using_equal_values('imphash', fileinfo, clusters['imphash_clusters'])
             fileinfo['fast_clustered'] = True
 
-def fast_cluster_on_contained_files(fileinfo, files, clusters):
+def cluster_on_contained_files(fileinfo, files, clusters):
     """
     TODO: Dokumenter
     """
@@ -79,16 +79,16 @@ def fast_cluster_on_contained_files(fileinfo, files, clusters):
         if not otherfile['fast_clustered']:
             # Before clustering the contained file, recursively
             # fast cluster the files contained in this the current file
-            fast_cluster_on_contained_files(otherfile, files, clusters)
+            cluster_on_contained_files(otherfile, files, clusters)
         if otherfile['fast_clustered']:
             # If the contained file has been fast clustered 
             # (based on the files contained inside of it),
             # fast cluster this file based on the contained file
-            fast_cluster_on_contained_file(fileinfo, otherfile, clusters)
-            return True
+            if cluster_on_contained_file(fileinfo, otherfile, files, clusters):
+                return True
     return False
 
-def fast_cluster_on_contained_file(original, contained, clusters):
+def cluster_on_contained_file(original, contained, files, clusters):
     """
     TODO: Dokumenter
     """
@@ -100,7 +100,15 @@ def fast_cluster_on_contained_file(original, contained, clusters):
     fake_info = contained.copy()
     fake_info['sha256'] = original['sha256']
     fast_cluster_file(fake_info, clusters)
-    original['fast_clustered'] = True
+    if fake_info['fast_clustered']:
+        original['fast_clustered'] = True
+        return True
+    else:
+        slow_cluster_file(fake_info, files, clusters)
+        if fake_info['slow_clustered']:
+            original['fast_clustered'] = True
+            return True
+    return False
 
 def slow_cluster_file(fileinfo, files, clusters):
     # Cluster with slow methods only if not yet clustered
@@ -188,25 +196,49 @@ def cluster_using_tlsh(fileinfo, files, tlsh_clusters):
             if (otherfile['tlsh']
                     and not otherfile['tlsh_cluster']
                     and fileinfo['sha256'] != otherfile['sha256']
-                    and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])):
+                    and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh']) <= threshold):
                 # Add other files to this new cluster if they match
                 tlsh_clusters[fileinfo['tlsh']]['items'].add(otherfile['sha256'])
                 otherfile['tlsh_cluster'] = fileinfo['tlsh_cluster']
 
-def label_clusters(files, feature_clusters):
+def label_clusters(files, clusters):
+    """
+    TODO: Dokumenter
+    """
+    label_clusters_of_specific_feature(files, clusters['imphash_clusters'])
+    label_clusters_of_specific_feature(files, clusters['icon_clusters'])
+    label_clusters_of_specific_feature(files, clusters['resource_clusters'])
+    label_clusters_of_specific_feature(files, clusters['tlsh_clusters'])
+
+def label_clusters_of_specific_feature(files, feature_clusters):
+    """
+    TODO: Dokumenter
+    """
+
+    # Mark clusters with family and purity
+    # Only sufficiently pure families with a clear label should be used to label testing files.
 
     pass
 
 def analyse_file_cluster(sha256hashes, files):
-
+    """
+    TODO: Dokumenter
+    """
     families_in_cluster = {}
-    cluster_size = len(sha256hashes)
+    cluster_size = 0
     for sha256 in sha256hashes:
-        family = files[sha256]['family']
-        if family not in families_in_cluster.keys():
-            families_in_cluster[family] = 1
-        else:
-            families_in_cluster[family] += 1
+        fileinfo = files[sha256]
+        # Only analyse incoming files (unpacked files are not relevant)
+        if fileinfo['incoming']:
+            #print(fileinfo)
+            cluster_size += 1
+            if fileinfo['family'] not in families_in_cluster.keys():
+                families_in_cluster[fileinfo['family']] = 1
+            else:
+                families_in_cluster[fileinfo['family']] += 1
+    if cluster_size == 0:
+        return 0, 0, '', 0
+    
     # Retrieve the most common family (might be even, but should not matter)
     most_common_family = max(families_in_cluster, key=families_in_cluster.get)
     files_in_most_common = families_in_cluster[most_common_family]

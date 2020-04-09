@@ -79,15 +79,17 @@ def analyse_clusters():
     stats['tlsh_mean_purity'], stats['tlsh_mean_size'], stats['tlsh_clustered_files'], stats['tlsh_clusters'] = analyse_feature_clusters(clusters['tlsh_clusters'])
 
 def analyse_feature_clusters(clusters):
-    number_of_clusters = len(clusters)
+    number_of_clusters = 0
     total_files = 0
     mean_purity = 0
     mean_size = 0
     for cluster in clusters.values():
         cluster_purity, cluster_size, most_common_family, files_in_most_common = clustering.analyse_file_cluster(cluster['items'], files)
-        mean_purity += cluster_purity
-        mean_size += cluster_size
-        total_files += len(cluster['items'])
+        if cluster_size:
+            number_of_clusters += 1
+            mean_purity += cluster_purity
+            mean_size += cluster_size
+            total_files += cluster_size
     if number_of_clusters != 0:
         mean_purity = mean_purity / number_of_clusters
         mean_size = mean_size / number_of_clusters
