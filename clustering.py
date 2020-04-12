@@ -29,8 +29,8 @@ def cluster_files(files, clusters):
     """
 
     for sha256 in files.keys():
-        # Iterate over files and attempt to cluster
-        # the file with fast clustering methods/features
+        # Iterate over all files and cluster files
+        # that can be clustered with fast methods
         fileinfo = files[sha256]
         fast_cluster_file(fileinfo, clusters)
     
@@ -43,8 +43,24 @@ def cluster_files(files, clusters):
                 # Attempt to cluster the file on contained PE files
                 cluster_on_contained_files(fileinfo, files, clusters)
             if not fileinfo['fast_clustered']:
-                # If still not fast clustered, cluster slowly
+                # If still not fast clustered, cluster using slow features
                 slow_cluster_file(fileinfo, files, clusters)
+
+def cluster_file(fileinfo, files, clusters):
+    """
+    TODO: Dokumenter
+    Benyttes under real-time clustering
+    """
+    fast_cluster_file(fileinfo, clusters)
+    if not fileinfo['fast_clustered']:
+        # If the file has not been clustered with fast properties
+        if CLUSTER_WITH_CONTAINED_PE and fileinfo['contained_pe_files']:
+            # Attempt to cluster the file on contained PE files
+            cluster_on_contained_files(fileinfo, files, clusters)
+        if not fileinfo['fast_clustered']:
+            # If still not fast clustered, cluster using slow features
+            slow_cluster_file(fileinfo, files, clusters)
+
 
 def fast_cluster_file(fileinfo, clusters):
     """
@@ -91,6 +107,8 @@ def cluster_on_contained_files(fileinfo, files, clusters):
 def cluster_on_contained_file(original, contained, files, clusters):
     """
     TODO: Dokumenter
+    TODO: Sjekk logikken til denne metoden.
+    Vil forelderen egentlig kunne vite hvilken cluster den er i?
     """
     # Create a new "fake" fileinfo.
     # It has the features of the contained file, but
@@ -99,6 +117,7 @@ def cluster_on_contained_file(original, contained, files, clusters):
     # the contained file would be added to
     fake_info = contained.copy()
     fake_info['sha256'] = original['sha256']
+    fake_info['incoming'] = True
     fast_cluster_file(fake_info, clusters)
     if fake_info['fast_clustered']:
         original['fast_clustered'] = True
@@ -127,7 +146,7 @@ def cluster_on_contained_resources(fileinfo, resource_clusters):
         else:
             # Add new resource cluster if resource hash not present
             resource_clusters[resource_hash] = {
-                'label': '',
+                'label': None,
                 'learning_purity': 0,
                 'items': set()
             }
@@ -146,7 +165,7 @@ def cluster_using_equal_values(key, fileinfo, cluster):
         # If value is not present in the cluster keys,
         # create new cluster and add this file to the new cluster
         cluster[fileinfo[key]] = {
-            'label': '',
+            'label': None,
             'learning_purity': 0,
             'items': set()
         }
@@ -183,7 +202,7 @@ def cluster_using_tlsh(fileinfo, files, tlsh_clusters):
     else:
         # Create new tlsh cluster if no suitable cluster was found
         tlsh_clusters[fileinfo['tlsh']] = {
-            'label': '',
+            'label': None,
             'learning_purity': 0,
             'items': set()
         }
@@ -205,22 +224,34 @@ def label_clusters(files, clusters):
     """
     TODO: Dokumenter
     """
-    label_clusters_of_specific_feature(files, clusters['imphash_clusters'])
-    label_clusters_of_specific_feature(files, clusters['icon_clusters'])
-    label_clusters_of_specific_feature(files, clusters['resource_clusters'])
-    label_clusters_of_specific_feature(files, clusters['tlsh_clusters'])
+    for feature_type in clusters.keys():
+        # Label all clusters for all feature types
+        label_clusters_of_specific_feature(clusters[feature_type], files)
 
-def label_clusters_of_specific_feature(files, feature_clusters):
+def label_clusters_of_specific_feature(feature_clusters, files):
     """
     TODO: Dokumenter
     """
-
+    MINIMUM_PURITY = 0.8
+    MINIMUM_REQUIRED_FILES = 1 / (1 - MINIMUM_PURITY)
+    ABSOLUTE_MINIMUM = 0.51
+    
     # Mark clusters with family and purity
     # Only sufficiently pure families with a clear label should be used to label testing files.
+    for key in feature_clusters.keys():
+        cluster_purity, cluster_size, most_common_family, files_in_most_common = analyse_file_cluster(feature_clusters[key]['items'], files, True)
+        if (cluster_purity > MINIMUM_PURITY 
+                or (cluster_size < MINIMUM_REQUIRED_FILES 
+                and cluster_purity >= ABSOLUTE_MINIMUM)):
+            # If cluster is sufficiently pure or there are few 
+            # files in the cluster (but the purity is at least 51%),
+            # label the cluster with the name of the most common family.
+            feature_clusters[key]['label'] = most_common_family
+            feature_clusters[key]['learning_purity'] = cluster_purity
+        # If cluster cannot be labelled, the label will remain
+        # as the default value (None)
 
-    pass
-
-def analyse_file_cluster(sha256hashes, files):
+def analyse_file_cluster(sha256hashes, files, only_incoming=True):
     """
     TODO: Dokumenter
     """
@@ -229,7 +260,7 @@ def analyse_file_cluster(sha256hashes, files):
     for sha256 in sha256hashes:
         fileinfo = files[sha256]
         # Only analyse incoming files (unpacked files are not relevant)
-        if fileinfo['incoming']:
+        if fileinfo['incoming'] or only_incoming == False:
             #print(fileinfo)
             cluster_size += 1
             if fileinfo['family'] not in families_in_cluster.keys():
@@ -246,41 +277,48 @@ def analyse_file_cluster(sha256hashes, files):
     cluster_purity = files_in_most_common / cluster_size
     return cluster_purity, cluster_size, most_common_family, files_in_most_common
 
-
-# TODO: Slett?
-def not_bad_cluster(fileset, files):
+def label_file(fileinfo, clusters):
     """
-    Check if a cluster is not bad / unpure.
-    This involves iterating through files where "training == True"
-        and checking the how "pure" the cluster seems to be.
-    Returns false if more than a certain ratio of the files belong to a different
-        family than the majority if the cluster has more than a minimum number labelled files.
+    TODO: Dokumenter
     """
-    MINIMUM_PURITY = 0.8
-
-    families = {}
-    total_training_files = 0
-    minimum_labelled_files = 1 / (1 - MINIMUM_PURITY)
-
-    for sha256 in fileset:
-        fileinfo = files[sha256]
-        if fileinfo['training']:
-            total_training_files += 1
-            family = fileinfo['family']
-            if family in families.keys():
-                families[family] += 1
-            else:
-                families[family] = 1
-    
-    if total_training_files >= minimum_labelled_files:
-        most_common_family = max(families, key=families.get)
-        number_of_most_common = families[most_common_family]
-        if number_of_most_common / total_training_files >= MINIMUM_PURITY:
-            # If cluster purity is sufficiently pure, return true (not bad)
-            return True
-        else:
-            # Or else, return false (cluster is bad)
-            return False
+    if label_file_on_feature(fileinfo, 'imphash', clusters['imphash_clusters']):
+        return
+    elif label_file_on_feature(fileinfo, 'contained_resources', clusters['resource_clusters'], True):
+        return
+    elif label_file_on_feature(fileinfo, 'icon_hash', clusters['icon_clusters']):
+        return
+    elif label_file_on_feature(fileinfo, 'tlsh_cluster', clusters['tlsh_clusters']):
+        return
     else:
-        # If too few files, return true (not bad)
-        return True
+        # If no label could be given. TODO: Hva skal gjøres?
+        return
+    # TODO: Bør filer under testing clusteres med trege metoder
+    # dersom de er alene i alle clustere dannet med raske metoder?
+    # Altså kun "fast clusteret" hvis de faktisk havner sammen med andre filer
+
+def label_file_on_feature(fileinfo, key, feature_clusters, is_a_set=False):
+    """
+    TODO: Dokumenter
+    """
+    if not fileinfo[key]:
+        # Return false if value is None
+        return False
+    if is_a_set:
+        # if fileinfo[key] is a set of multiple items, 
+        # iterate over all potential clusters
+        for value in fileinfo[key]:
+            label = feature_clusters[value]['label']
+            if label is not None:
+                # Set label and return True if label was found
+                fileinfo['given_label'] = label
+                return True
+    else:
+        # If fileinfo[key] is the lookup key
+        label = feature_clusters[fileinfo[key]]['label']
+        if label is not None:
+            # Set label and return True if label was found
+            fileinfo['given_label'] = label
+            return True
+    
+    # Return false if no label in cluster(s)
+    return False

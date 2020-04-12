@@ -25,7 +25,7 @@ clusters = {
 """
 Innhold i hver cluster:
 dict_name[key] = {
-    'label': '',
+    'label': None,
     'learning_purity': 0,
     'items': set()
 }
@@ -58,7 +58,9 @@ def serve_simple_queue(ip, port, key):
     server.serve_forever()
 
 def feature_extraction_worker():
-    # Connect to feature extraction queue and clustering queue
+    """
+    Connect to feature extraction (job) queue and clustering (job done) queue
+    """
     job_manager = QueueManager(address=(QUEUE_MANAGER_IP, JOB_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
     done_manager = QueueManager(address=(QUEUE_MANAGER_IP, DONE_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
     try:
@@ -111,66 +113,152 @@ def add_files_for_extraction(*file_list):
             # Send all files in the list to the feature extraction queue
             job_queue.put(item)
 
-def collect_features():
-    number_of_files = 0
-
-    # Connect to queue
+def get_done_queue():
+    """
+    TODO: Dokumenter
+    """
     done_manager = QueueManager(address=(QUEUE_MANAGER_IP, DONE_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
     try:
         done_manager.connect()
     except:
         print("Cannot connect to queue manager. Please try again or check the configuration.")
         raise SystemExit
-    done_queue = done_manager.get_queue()
+    return done_manager.get_queue()
 
-    while True:
-        try:
-            # Retrieve file metadata from queue
-            fileinfo = done_queue.get(timeout=QUEUE_TIMEOUT)
-        except EOFError:
-            print("Queue not available. Please check if the queue manager is still running.")
-            break
-        except queue.Empty:
-            print("Done-queue empty. Stopping collection.")
-            break
-        else:
+def get_fileinfo_from_done_queue(done_queue):
+    """
+    TODO: Dokumenter
+    """
+    try:
+        # Return file metadata the done queue
+        return done_queue.get(timeout=QUEUE_TIMEOUT)
+    except EOFError:
+        print("Queue not available. Please check if the queue manager is still running.")
+        return None
+    except queue.Empty:
+        print("Done-queue empty. Stopping collection.")
+        return None
+
+def collect_features():
+    """
+    TODO: Dokumenter
+    """
+    global files
+    global clusters
+
+    number_of_files = 0
+    done_queue = get_done_queue()
+
+    # Attempt to retrieve a file from the done queue
+    fileinfo = get_fileinfo_from_done_queue(done_queue)
+    # Continue while it is possible to retrieve a file
+    while fileinfo is not None:
+        fileinfo['learning'] = True
+        if fileinfo['incoming']:
+            number_of_files += 1
+            print("Processing incoming file number: " + str(number_of_files))
+        # If file was successfully retrieved from queue
+        if fileinfo['sha256'] in files.keys():
+            # If file has been received and clustered before
+            # Merge new data into the existing data.
+            if PRINT_PROGRESS:
+                print("Merging file with existing information  " + fileinfo['sha256'])
+            current_file = files[fileinfo['sha256']]
             if fileinfo['incoming']:
-                number_of_files += 1
-                print("Processing incoming file number: " + str(number_of_files))
-            # If file was successfully retrieved from queue
-            if fileinfo['sha256'] in files.keys():
-                # If file has been received and clustered before
-                # Merge new data into the existing data.
-                if PRINT_PROGRESS:
-                    print("Merging file with existing information  " + fileinfo['sha256'])
-                current_file = files[fileinfo['sha256']]
-                if fileinfo['incoming']:
-                    current_file['incoming'] = True
-                else:       # If file is not incoming (was unpacked from another file)
-                    # Update "unpacks_from" since it might be contained in multiple different binaries
-                    current_file['unpacks_from'].add(fileinfo['unpacks_from'])
-            else:
-                # If file has not been received before, add data
-                if PRINT_PROGRESS:
-                    print("Storing file " + fileinfo['sha256'])
+                current_file['incoming'] = True
+            else:       # If file is not incoming (was unpacked from another file)
+                # Update "unpacks_from" since it might be contained in multiple different binaries
+                current_file['unpacks_from'].add(fileinfo['unpacks_from'])
+        else:
+            # If file has not been received before, add data
+            if PRINT_PROGRESS:
+                print("Storing file " + fileinfo['sha256'])
 
-                # Convert "unpacks_from" to a set
-                unpacks_from = fileinfo['unpacks_from']
-                fileinfo['unpacks_from'] = set()
-                if unpacks_from is not None:
-                    fileinfo['unpacks_from'].add(unpacks_from)
-                files[fileinfo['sha256']] = fileinfo
+            # Convert "unpacks_from" to a set
+            unpacks_from = fileinfo['unpacks_from']
+            fileinfo['unpacks_from'] = set()
+            if unpacks_from is not None:
+                fileinfo['unpacks_from'].add(unpacks_from)
+            files[fileinfo['sha256']] = fileinfo
+        
+        # Attempt to retrieve next file and continue loop
+        fileinfo = get_fileinfo_from_done_queue(done_queue)
 
 def cluster_incoming():
-    pass
+    """
+    TODO: Dokumenter
+    """
+    global files
+    global clusters
     # TODO: Cluster litt som under training
     # Men pass på at 
+    number_of_files = 0
+    done_queue = get_done_queue()
+
+    correctly_labelled = 0
+    incorrectly_labelled = 0
+    not_labelled = 0
+
+    # Attempt to retrieve a file from the done queue
+    fileinfo = get_fileinfo_from_done_queue(done_queue)
+    # Continue while it is possible to retrieve a file
+    while fileinfo is not None:
+        if fileinfo['incoming']:
+            number_of_files += 1
+            print("Clustering incoming file number: " + str(number_of_files))
+        # If file was successfully retrieved from queue
+        if fileinfo['sha256'] in files.keys():
+            # If file has been received and clustered before
+            # Merge new data into the existing data.
+            if PRINT_PROGRESS:
+                print("Merging file with existing information  " + fileinfo['sha256'])
+            current_file = files[fileinfo['sha256']]
+            if fileinfo['incoming']:
+                current_file['incoming'] = True
+            else:       # If file is not incoming (was unpacked from another file)
+                # Update "unpacks_from" since it might be contained in multiple different binaries
+                current_file['unpacks_from'].add(fileinfo['unpacks_from'])
+        else:
+            # If file has not been received before, add data
+            if PRINT_PROGRESS:
+                print("Storing file " + fileinfo['sha256'])
+            # Convert "unpacks_from" to a set
+            unpacks_from = fileinfo['unpacks_from']
+            fileinfo['unpacks_from'] = set()
+            if unpacks_from is not None:
+                fileinfo['unpacks_from'].add(unpacks_from)
+            
+            files[fileinfo['sha256']] = fileinfo
+            # TODO: Cluster the file, label it
+            clustering.cluster_file(fileinfo, files, clusters)
+            clustering.label_file(fileinfo, clusters)
+            
+        if fileinfo['incoming']:
+            if fileinfo['given_label'] is not None:
+                if fileinfo['family'] == fileinfo['given_label']:
+                    correctly_labelled += 1
+                else:
+                    incorrectly_labelled += 1
+            else:
+                not_labelled += 1
+
+            # TODO: Check if correct label and store results
+        
+        # Attempt to retrieve next file and continue loop
+        fileinfo = get_fileinfo_from_done_queue(done_queue)
+    print("Correctly labelled: " + str(correctly_labelled))
+    print("Incorrectly labelled: " + str(incorrectly_labelled))
+    print("Not labelled: " + str(not_labelled))
+    print("Total files: " + str(number_of_files))
+    # TODO: Hva med filer som kommer inn, men som ikke kan parses av pefile?
+    # Disse bør telles som "not labelled" og telle med på "number_of_files"
 
 def save_to_pickles():
     """
     Save data to pickles to allow later processing.
     """
-
+    global files
+    global clusters
     # Write results to pickles to allow further processing
     if not os.path.exists('pickles/'):
         os.mkdir('pickles')
@@ -179,6 +267,22 @@ def save_to_pickles():
         pickle.dump(files, picklefile)
     with open('pickles/clusters.pkl', 'wb') as picklefile:
         pickle.dump(clusters, picklefile)
+
+def load_from_pickles():
+    global files
+    global clusters
+    """
+    Load data from pickles
+    """
+
+    if not os.path.exists('pickles/files.pkl') or not os.path.exists('pickles/clusters.pkl'):
+        print("No pickles found. Perform learning before attempting to test.")
+        raise SystemExit
+    
+    with open('pickles/files.pkl', 'rb') as picklefile:
+        files = pickle.load(picklefile)
+    with open('pickles/clusters.pkl', 'rb') as picklefile:
+        clusters = pickle.load(picklefile)
 
 # If main script (not another thread/process)
 if __name__ == '__main__':
@@ -218,7 +322,6 @@ if __name__ == '__main__':
 
         if not files_for_analysis:
             print("No files to analyse")
-        
         else:
             # If filepaths have been loaded
             # Create queue daemon for files to perform feature extraction on
@@ -244,14 +347,15 @@ if __name__ == '__main__':
 
                 clustering.label_clusters(files, clusters)
 
-                # Save results to pickles when done working
+                # TODO: Remove line (and outcommenting a few lines below):
+                save_to_pickles()
             elif work_type == 'test':
-                # TODO: Load file / cluster information
-
+                load_from_pickles()
                 cluster_incoming()
 
                 # TODO: Analyse clusters
 
-            save_to_pickles()
+            # TODO: Remove comment
+            #save_to_pickles()
 
             print("Main done")

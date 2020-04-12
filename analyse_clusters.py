@@ -84,7 +84,7 @@ def analyse_feature_clusters(clusters):
     mean_purity = 0
     mean_size = 0
     for cluster in clusters.values():
-        cluster_purity, cluster_size, most_common_family, files_in_most_common = clustering.analyse_file_cluster(cluster['items'], files)
+        cluster_purity, cluster_size, most_common_family, files_in_most_common = clustering.analyse_file_cluster(cluster['items'], files, True)
         if cluster_size:
             number_of_clusters += 1
             mean_purity += cluster_purity
