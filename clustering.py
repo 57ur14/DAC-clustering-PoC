@@ -1,19 +1,26 @@
 # -*- coding: utf-8 -*-
+"""
+clustering - a module for clustering and labelling files
+
+Part of D&C-Clustering-POC
+
+Copyright (c) 2020 Sturla Høgdahl Bae
+"""
 
 # External dependencies:
 # tlsh
 
 import configparser
-from collections import Counter
 import os
 import pickle
+from collections import Counter
 
 import tlsh
 
 # Retreive configuration
 config = configparser.ConfigParser()
 config.read('config.ini')
-PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
+PRINT_PROGRESS = config.getboolean('general', 'print_progress')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
@@ -108,6 +115,8 @@ def cluster_on_contained_file(original, contained, files, clusters):
     """
     TODO: Dokumenter
     TODO: Sjekk logikken til denne metoden.
+    TODO: Slett denne funksjonen og heller bare label filer basert på utpakkede filer?
+    Under validering kan man sjekke om noen utpakkede filer har fått en label!
     Vil forelderen egentlig kunne vite hvilken cluster den er i?
     """
     # Create a new "fake" fileinfo.
@@ -147,7 +156,7 @@ def cluster_on_contained_resources(fileinfo, resource_clusters):
             # Add new resource cluster if resource hash not present
             resource_clusters[resource_hash] = {
                 'label': None,
-                'learning_purity': 0,
+                'training_purity': 0,
                 'items': set()
             }
             # Add this file to new cluster
@@ -166,7 +175,7 @@ def cluster_using_equal_values(key, fileinfo, cluster):
         # create new cluster and add this file to the new cluster
         cluster[fileinfo[key]] = {
             'label': None,
-            'learning_purity': 0,
+            'training_purity': 0,
             'items': set()
         }
         cluster[fileinfo[key]]['items'].add(fileinfo['sha256'])
@@ -203,7 +212,7 @@ def cluster_using_tlsh(fileinfo, files, tlsh_clusters):
         # Create new tlsh cluster if no suitable cluster was found
         tlsh_clusters[fileinfo['tlsh']] = {
             'label': None,
-            'learning_purity': 0,
+            'training_purity': 0,
             'items': set()
         }
         tlsh_clusters[fileinfo['tlsh']]['items'].add(fileinfo['sha256'])
@@ -247,7 +256,7 @@ def label_clusters_of_specific_feature(feature_clusters, files):
             # files in the cluster (but the purity is at least 51%),
             # label the cluster with the name of the most common family.
             feature_clusters[key]['label'] = most_common_family
-            feature_clusters[key]['learning_purity'] = cluster_purity
+            feature_clusters[key]['training_purity'] = cluster_purity
         # If cluster cannot be labelled, the label will remain
         # as the default value (None)
 
@@ -289,6 +298,8 @@ def label_file(fileinfo, clusters):
         return
     elif label_file_on_feature(fileinfo, 'tlsh_cluster', clusters['tlsh_clusters']):
         return
+    elif fileinfo['contained_pe_files'] and label_file_on_contained_pe(fileinfo):
+        return
     else:
         # If no label could be given. TODO: Hva skal gjøres?
         return
@@ -322,3 +333,6 @@ def label_file_on_feature(fileinfo, key, feature_clusters, is_a_set=False):
     
     # Return false if no label in cluster(s)
     return False
+
+def label_file_on_contained_pe(fileinfo):
+    return False # TODO: implementer

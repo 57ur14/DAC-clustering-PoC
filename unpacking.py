@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
+"""
+unpacking - a module for detecting packers and unpacking packed files
 
-# External dependencies:
-# * pefile
-# * requests
-# * diec - https://github.com/horsicq/Detect-It-Easy (must be installed and added to path manually)
-# * clamav
-# * libclamunrar9
-# * upx
+Part of D&C-Clustering-POC
+
+Copyright (c) 2020 Sturla Høgdahl Bae
+
+External dependencies:
+* pefile:           pip3 install pefile
+* diec:             Manual installation: https://github.com/horsicq/Detect-It-Easy
+* clamav:           apt-get install clamav
+* libclamunrar9:    apt-get install libclamunrar9
+"""
 
 import configparser
 import hashlib
@@ -15,18 +20,18 @@ import shutil
 import subprocess
 import sys
 import time
-import tempfile
 
 import peutils
-import requests
 
 config = configparser.ConfigParser()
 config.read('config.ini')
-unpack_directory = config.get('clustering', 'unpacking_base_directory')
+STORE_UNPACKED = config.getboolean('unpacking', 'store_unpacked')
+if STORE_UNPACKED:
+    UNPACKED_DIRECTORY = config.get('unpacking', 'directory')
 
 # Create necessary directory if it does not exist
-if not os.path.exists(unpack_directory):
-    os.makedirs(unpack_directory)
+if STORE_UNPACKED and not os.path.exists(UNPACKED_DIRECTORY):
+    os.makedirs(UNPACKED_DIRECTORY)
 
 def detect_obfuscation_by_diec(filepath):
     """
@@ -41,7 +46,11 @@ def detect_obfuscation_by_diec(filepath):
 
 def get_diec_output(filepath):
     """
-    Run Detect It Easy Console on a file specified by a filepath and return values in a dictionary.
+    Run Detect It Easy Console on a file specified by a filepath 
+    and return values in a dictionary.
+    
+    Detect It Easy console version (diec) must be installed manually
+    and "diec" must be included in $PATH.
     """
     info = {}
     try:
@@ -49,6 +58,8 @@ def get_diec_output(filepath):
     except subprocess.CalledProcessError as err:
         print(err) # TODO: Handle error
     except OSError as err:
+        # Potentially out of memory or encountered other error.
+        # Print error message and retry later.
         print(err)
         print("Sleeping 5 minutes before trying again")
         time.sleep(300)
@@ -78,19 +89,26 @@ def get_diec_output(filepath):
                 info['joiner'] = line[12:]
     return info
 
-def unpack_file(filepath, original_sha256):
+def unpack_file(filepath, tmpdir):
     """
-    Attempt to unpack a file that has been identified to be packed.
-    Returns a list of unpacked files. In most cases an empty list or a list with a single filepath.
+    Attempt to unpack file.
+    filepath is the path to the file that should be attempted unpacked.
+    tmpdir is a path to a temporary directory unique to this thread where
+    the thread will attempt to unpack files to.
+    Returns a list of unpacked files or an empty list.
     """
 
-    tmpfile_object = tempfile.TemporaryDirectory()
-    tmpdir = tmpfile_object.name
+    # Other unpacking tools have been removed due to
+    # lacking reliability and usefulness of the tools.
+
+    # If multiple unpacking tools are to be used here, 
+    # subdirectories below tmpdir should be created for each
+    # tool to avoid tools overwriting output of each other.
 
     # Attempt static unpacking with ClamAV. Return unpacked files.
     return clam_unpack(filepath, tmpdir)
 
-def clam_unpack(filepath, tmpdir=None):
+def clam_unpack(filepath, tmpdir):
     """
     Attempt to unpack the malware statically with ClamAV.
     Returns a list that can either be empty or contain paths to files unpacked from the file at the specified path.
@@ -107,7 +125,7 @@ def clam_unpack(filepath, tmpdir=None):
     * Upack
     * Y0da Cryptor (1.3)
 
-    Dependencies (can be installed from apt repositories on Ubuntu):
+    Dependencies (can be installed from apt on Ubuntu):
     * clamav
     * libclamunrar9
 
@@ -156,31 +174,40 @@ def clam_unpack(filepath, tmpdir=None):
     except subprocess.CalledProcessError:
         return unpacked             # clamscan crashed, return empty list
     except OSError as err:
+        # Potentially out of memory or encountered other error.
+        # Print error message and retry later.
         print(err)
         print("Sleeping 5 minutes before trying again")
         time.sleep(300)
         return clam_unpack(filepath, tmpdir)
     else:
-        for root, dirs, files in os.walk(tmpdir, topdown=False):
+        for root, _, files in os.walk(tmpdir, topdown=False):
             for filename in files:
-                oldpath, newfilename = rename_to_sha256(os.path.join(root, filename))
-                newpath = os.path.join(unpack_directory, newfilename)
-                shutil.move(oldpath, newpath)
+                if STORE_UNPACKED:
+                    # Move file to permanent storage if 
+                    # unpacked files should be stored.
+                    oldpath, newfilename = rename_to_sha256(os.path.join(root, filename))
+                    newpath = os.path.join(UNPACKED_DIRECTORY, newfilename)
+                    shutil.move(oldpath, newpath)
+                else:
+                    # Move file to root of temporary directory if it
+                    # should be deleted after extracting features.
+                    newpath = os.path.join(root, filename)
                 unpacked.append(newpath)
-            for dirname in dirs:
-                os.rmdir(os.path.join(root, dirname))
         return unpacked
 
 def rename_to_sha256(filepath):
     """
-    Rename a file specified by a path to the sha256sum of the files and return the new path
+    Rename a file specified by a path to the sha256sum 
+    of the files and return the new path.
+    Returns the new path and the sha256sum of the file
     """
     with open(filepath, 'rb') as filehandle:
         rawfile = filehandle.read()
         directory = os.path.dirname(filepath)
         sha256sum = hashlib.sha256(rawfile).hexdigest()
-        newpath = directory + '/' + sha256sum
+        newpath = os.path.join(directory, sha256sum)
         if filepath != newpath:             # Only rename if it is not already named as the sha256sum
             shutil.move(filepath, newpath)  # Rename file to the sha256sum
-        return newpath, sha256sum       # Return the new path of the file and the sha256-sum (filename)
+        return newpath, sha256sum           # Return the new path of the file and the sha256sum (filename)
     return None, None                       # Return None if the file could not be opened

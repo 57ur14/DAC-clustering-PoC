@@ -10,8 +10,8 @@ import queue
 import time
 from multiprocessing.managers import BaseManager
 
-import feature_extraction
 import clustering
+import feature_extraction
 
 # Data structure for storing files
 files = {}
@@ -26,7 +26,7 @@ clusters = {
 Innhold i hver cluster:
 dict_name[key] = {
     'label': None,
-    'learning_purity': 0,
+    'training_purity': 0,
     'items': set()
 }
 """
@@ -34,7 +34,7 @@ dict_name[key] = {
 # Retreive configuration
 config = configparser.ConfigParser()
 config.read('config.ini')
-PRINT_PROGRESS = config.getboolean('clustering', 'print_progress')
+PRINT_PROGRESS = config.getboolean('general', 'print_progress')
 QUEUE_MANAGER_IP = config.get('queue_managers', 'ip')
 JOB_MANAGER_PORT = config.getint('queue_managers', 'job_port')
 DONE_MANAGER_PORT = config.getint('queue_managers', 'done_port')
@@ -57,9 +57,10 @@ def serve_simple_queue(ip, port, key):
     server = manager.get_server()
     server.serve_forever()
 
-def feature_extraction_worker():
+def feature_extraction_worker(training=False):
     """
     Connect to feature extraction (job) queue and clustering (job done) queue
+    If training is True, the file will be marked as being part of the training data set.
     """
     job_manager = QueueManager(address=(QUEUE_MANAGER_IP, JOB_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
     done_manager = QueueManager(address=(QUEUE_MANAGER_IP, DONE_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
@@ -82,9 +83,8 @@ def feature_extraction_worker():
                 # Stop when queue is empty
                 break
             else:
-                # TODO: fiks TRAINING:
-                TRAINING = True
-                result = feature_extraction.analyse_file(file_to_cluster['path'], family=file_to_cluster['family'], incoming=True, training=TRAINING)
+                # TODO: fiks TRAINING (skal være parameter til funksjonen):
+                result = feature_extraction.analyse_file(file_to_cluster['path'], family=file_to_cluster['family'], incoming=True, training=training)
                 send_to_done_queue(result, done_queue)
 
 def send_to_done_queue(fileinfo, done_queue):
@@ -146,17 +146,17 @@ def collect_features():
     global files
     global clusters
 
-    number_of_files = 0
+    incoming_files_parsed = 0
     done_queue = get_done_queue()
 
     # Attempt to retrieve a file from the done queue
     fileinfo = get_fileinfo_from_done_queue(done_queue)
     # Continue while it is possible to retrieve a file
     while fileinfo is not None:
-        fileinfo['learning'] = True
+        fileinfo['training'] = True
         if fileinfo['incoming']:
-            number_of_files += 1
-            print("Processing incoming file number: " + str(number_of_files))
+            incoming_files_parsed += 1
+            print("Processing incoming file number: " + str(incoming_files_parsed))
         # If file was successfully retrieved from queue
         if fileinfo['sha256'] in files.keys():
             # If file has been received and clustered before
@@ -168,23 +168,18 @@ def collect_features():
                 current_file['incoming'] = True
             else:       # If file is not incoming (was unpacked from another file)
                 # Update "unpacks_from" since it might be contained in multiple different binaries
-                current_file['unpacks_from'].add(fileinfo['unpacks_from'])
+                current_file['unpacks_from'].update(fileinfo['unpacks_from'])
         else:
             # If file has not been received before, add data
             if PRINT_PROGRESS:
                 print("Storing file " + fileinfo['sha256'])
-
-            # Convert "unpacks_from" to a set
-            unpacks_from = fileinfo['unpacks_from']
-            fileinfo['unpacks_from'] = set()
-            if unpacks_from is not None:
-                fileinfo['unpacks_from'].add(unpacks_from)
+            # Add file information to global data structure
             files[fileinfo['sha256']] = fileinfo
         
         # Attempt to retrieve next file and continue loop
         fileinfo = get_fileinfo_from_done_queue(done_queue)
 
-def cluster_incoming():
+def cluster_and_validate_incoming():
     """
     TODO: Dokumenter
     """
@@ -192,7 +187,7 @@ def cluster_incoming():
     global clusters
     # TODO: Cluster litt som under training
     # Men pass på at 
-    number_of_files = 0
+    incoming_files_parsed = 0
     done_queue = get_done_queue()
 
     correctly_labelled = 0
@@ -204,8 +199,8 @@ def cluster_incoming():
     # Continue while it is possible to retrieve a file
     while fileinfo is not None:
         if fileinfo['incoming']:
-            number_of_files += 1
-            print("Clustering incoming file number: " + str(number_of_files))
+            incoming_files_parsed += 1
+            print("Clustering incoming file number: " + str(incoming_files_parsed))
         # If file was successfully retrieved from queue
         if fileinfo['sha256'] in files.keys():
             # If file has been received and clustered before
@@ -217,23 +212,24 @@ def cluster_incoming():
                 current_file['incoming'] = True
             else:       # If file is not incoming (was unpacked from another file)
                 # Update "unpacks_from" since it might be contained in multiple different binaries
-                current_file['unpacks_from'].add(fileinfo['unpacks_from'])
+                current_file['unpacks_from'].update(fileinfo['unpacks_from'])
+            if fileinfo['training']:
+                # If file was introduced during training, label file
+                fileinfo['given_label'] = fileinfo['family']
         else:
             # If file has not been received before, add data
             if PRINT_PROGRESS:
                 print("Storing file " + fileinfo['sha256'])
-            # Convert "unpacks_from" to a set
-            unpacks_from = fileinfo['unpacks_from']
-            fileinfo['unpacks_from'] = set()
-            if unpacks_from is not None:
-                fileinfo['unpacks_from'].add(unpacks_from)
-            
+            # Add file to global data structure            
             files[fileinfo['sha256']] = fileinfo
-            # TODO: Cluster the file, label it
+
+            # Cluster the file
             clustering.cluster_file(fileinfo, files, clusters)
+            # Label the file
             clustering.label_file(fileinfo, clusters)
             
         if fileinfo['incoming']:
+            # Check if correctly labelled and store results
             if fileinfo['given_label'] is not None:
                 if fileinfo['family'] == fileinfo['given_label']:
                     correctly_labelled += 1
@@ -241,78 +237,103 @@ def cluster_incoming():
                     incorrectly_labelled += 1
             else:
                 not_labelled += 1
-
-            # TODO: Check if correct label and store results
         
         # Attempt to retrieve next file and continue loop
         fileinfo = get_fileinfo_from_done_queue(done_queue)
     print("Correctly labelled: " + str(correctly_labelled))
     print("Incorrectly labelled: " + str(incorrectly_labelled))
     print("Not labelled: " + str(not_labelled))
-    print("Total files: " + str(number_of_files))
+    print("Total files that could be parsed: " + str(incoming_files_parsed))
     # TODO: Hva med filer som kommer inn, men som ikke kan parses av pefile?
     # Disse bør telles som "not labelled" og telle med på "number_of_files"
 
-def save_to_pickles():
+def save_to_pickles(folder):
     """
     Save data to pickles to allow later processing.
+    Folder should be the path to a folder where the 
+    files "files.pkl" and "clusters.pkl" will be stored.
+    Suggested values for folder:
+        pickles/extracted/
+        pickles/clustered/
+        pickles/validated/
     """
     global files
     global clusters
-    # Write results to pickles to allow further processing
-    if not os.path.exists('pickles/'):
-        os.mkdir('pickles')
 
-    with open('pickles/files.pkl', 'wb') as picklefile:
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+
+    files_path = os.path.join(folder, 'files.pkl')
+    clusters_path = os.path.join(folder, 'clusters.pkl')
+
+    with open(files_path, 'wb') as picklefile:
         pickle.dump(files, picklefile)
-    with open('pickles/clusters.pkl', 'wb') as picklefile:
+    with open(clusters_path, 'wb') as picklefile:
         pickle.dump(clusters, picklefile)
 
-def load_from_pickles():
-    global files
-    global clusters
+def load_from_pickles(folder, load_clusters=False):
     """
     Load data from pickles
+    Folder should be the path to a folder where the 
+        files "files.pkl" and "clusters.pkl" will be stored.
+        Suggested values:
+            pickles/extracted/
+            pickles/clustered/
+            pickles/validated/
+    If load_clusters is True, clusters will also be loaded
+    Returns False on failure to load pickles and True on success
     """
+    global files
+    global clusters
 
-    if not os.path.exists('pickles/files.pkl') or not os.path.exists('pickles/clusters.pkl'):
-        print("No pickles found. Perform learning before attempting to test.")
-        raise SystemExit
-    
-    with open('pickles/files.pkl', 'rb') as picklefile:
-        files = pickle.load(picklefile)
-    with open('pickles/clusters.pkl', 'rb') as picklefile:
-        clusters = pickle.load(picklefile)
+    files_path = os.path.join(folder, 'files.pkl')
+    clusters_path = os.path.join(folder, 'clusters.pkl')
+
+    if not os.path.exists(files_path):
+        print("Files pickle not found. Perform feature extraction before attempting to cluster / validate.")
+        return False
+    else:
+        with open(files_path, 'rb') as picklefile:
+            files = pickle.load(picklefile)
+    if load_clusters and not os.path.exists(clusters_path):
+        print("Clusters pickle not found. Perform training before attempting to validate.")
+        return False
+    elif load_clusters:
+        with open(clusters_path, 'rb') as picklefile:
+            clusters = pickle.load(picklefile)
+    return True
 
 # If main script (not another thread/process)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run feature extraction/clustering')
-    parser.add_argument('-N', '--number-of-workers', help='Integer specifying the number of feature extraction threads')
-    parser.add_argument('-L', '--learn-list', help='Path to a text file containing filepaths to files in learning/training set, where each line consists of <path> <family>. Path must not contain any spaces.')
-    parser.add_argument('-T', '--test-list', help='Path to a text file containing filepaths to files in testing set, where each line consists of <path> <family>. Path must not contain any spaces.')
+    parser.add_argument('-N', '--number-of-workers', type=int, default=multiprocessing.cpu_count(), help='Integer specifying the number of feature extraction threads')
+    parser.add_argument('-E', '--extraction-list', help='Path to a text file containing filepaths to files that should have their features extracted (for clustering), where each line consists of <path> <family>. Path must not contain any spaces.')
+    parser.add_argument('-C', '--cluster', action='store_true', help='Do clustering on files where features have been extracted.')
+    parser.add_argument('-T', '--train-list', help='Equivalent of -E <filename> -C. Path to a text file containing filepaths to files in training set, where each line consists of <path> <family>. Path must not contain any spaces.')
+    parser.add_argument('-V', '--validation-list', help='Path to a text file containing filepaths to files in validation set, where each line consists of <path> <family>. Path must not contain any spaces.')
     args = parser.parse_args()
-
-    # Identify number of workers
-    number_of_workers = multiprocessing.cpu_count()
-    if args.number_of_workers is not None:
-        number_of_workers = int(args.number_of_workers)
 
     # Fill list with files that should be sent to analysis
     files_for_analysis = []
     filename = None
-    work_type = None
-    if args.learn_list is not None:
-        work_type = 'learn'
-        filename = args.learn_list
-    if args.test_list is not None:
-        work_type = 'test'
-        filename = args.test_list
-
-    if not filename:
-        # Print help if no arguments were specified
-        print("At least one of the following combinations must be supplied: -L <path to file> | -T <path to file>")
-        parser.print_help()
-    else:
+    mark_as_training = False
+    do_extraction = False
+    do_clustering = args.cluster
+    do_validation = False
+    if args.train_list is not None:
+        filename = args.train_list
+        mark_as_training = True
+        do_extraction = True
+        do_clustering = True
+    if args.extraction_list is not None:
+        filename = args.extraction_list
+        mark_as_training = True
+        do_extraction = True
+    if args.validation_list is not None:
+        filename = args.validation_list
+        do_validation = True
+    
+    if do_extraction or do_validation:
         # Load paths and families from file and process the files
         with open(filename, 'r') as infile:
             lines = infile.read().splitlines()
@@ -322,40 +343,47 @@ if __name__ == '__main__':
 
         if not files_for_analysis:
             print("No files to analyse")
-        else:
-            # If filepaths have been loaded
-            # Create queue daemon for files to perform feature extraction on
-            multiprocessing.Process(target=serve_simple_queue, args=(QUEUE_MANAGER_IP, JOB_MANAGER_PORT, QUEUE_MANAGER_KEY), daemon=True).start()
+            raise SystemExit
 
-            # Create queue daemon for files to perform clustering on 
-            multiprocessing.Process(target=serve_simple_queue, args=(QUEUE_MANAGER_IP, DONE_MANAGER_PORT, QUEUE_MANAGER_KEY), daemon=True).start()
+        # If filepaths have been loaded
+        # Create queue daemon for files to perform feature extraction on
+        multiprocessing.Process(target=serve_simple_queue, args=(QUEUE_MANAGER_IP, JOB_MANAGER_PORT, QUEUE_MANAGER_KEY), daemon=True).start()
 
-            # Sleep for 0.2 second to ensure queues are running
-            time.sleep(0.2)
+        # Create queue daemon for files to perform clustering on 
+        multiprocessing.Process(target=serve_simple_queue, args=(QUEUE_MANAGER_IP, DONE_MANAGER_PORT, QUEUE_MANAGER_KEY), daemon=True).start()
 
-            multiprocessing.Process(target=add_files_for_extraction, args=files_for_analysis, daemon=True).start()
+        # Sleep for 0.2 second to ensure queues are running
+        time.sleep(0.2)
 
-            # Create a thread that retrieves files from feature extraction queue,
-            # extracts their features and adds them to the clustering queue.
-            for i in range(number_of_workers):
-                multiprocessing.Process(target=feature_extraction_worker, daemon=True).start()
+        multiprocessing.Process(target=add_files_for_extraction, args=(files_for_analysis), daemon=True).start()
 
-            if work_type == 'learn':
-                collect_features()
+        # Create a thread that retrieves files from feature extraction queue,
+        # extracts their features and adds them to the clustering queue.
+        for i in range(args.number_of_workers):
+            multiprocessing.Process(target=feature_extraction_worker, args=(mark_as_training,), daemon=True).start()
 
-                clustering.cluster_files(files, clusters)
-
-                clustering.label_clusters(files, clusters)
-
-                # TODO: Remove line (and outcommenting a few lines below):
-                save_to_pickles()
-            elif work_type == 'test':
-                load_from_pickles()
-                cluster_incoming()
-
-                # TODO: Analyse clusters
-
-            # TODO: Remove comment
-            #save_to_pickles()
-
-            print("Main done")
+    if do_extraction:
+        # Store files coming from feature extraction job done queue.
+        collect_features()
+        # Save file features to pickles
+        save_to_pickles('pickles/extracted/')
+    if do_clustering:
+        # Load file features from pickles
+        if do_extraction or load_from_pickles('pickles/extracted/'):
+            # Cluster the files based on extracted features
+            clustering.cluster_files(files, clusters)
+            # Label the created clusters
+            clustering.label_clusters(files, clusters)
+            # Save updated file information and clusters to pickles.
+            save_to_pickles('pickles/clustered/')
+    if do_validation:
+        # Load files and clusters from training
+        if load_from_pickles('pickles/clustered/', True):
+            # Perform feature extraction, cluster and label 
+            # files coming from feature extraction job done queue.
+            cluster_and_validate_incoming()
+            # Save updated file information and clusters to pickles
+            save_to_pickles('pickles/validated/')
+    if do_extraction or do_validation:
+        # Print this to allow calculation of how many files could not be parsed
+        print("Number of file paths in provided file: " + str(len(files_for_analysis)))
