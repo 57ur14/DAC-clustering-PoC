@@ -2,7 +2,7 @@ __pycache__/
 *.py[cod]
 
 config.ini
-.unipacker_brokenimport.exe
 *results/
 split_dataset/
 pickles/
+local/
