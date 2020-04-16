@@ -5,15 +5,14 @@ clustering - a module for clustering and labelling files
 Part of D&C-Clustering-POC
 
 Copyright (c) 2020 Sturla Høgdahl Bae
-"""
 
-# External dependencies:
-# tlsh
+Dependencies:
+* tlsh
+"""
 
 import configparser
 import os
 import pickle
-from collections import Counter
 
 import tlsh
 
@@ -24,11 +23,12 @@ PRINT_PROGRESS = config.getboolean('general', 'print_progress')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
-CLUSTER_WITH_CONTAINED_PE = config.getboolean('clustering', 'cluster_with_contained_pe')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 TLSH_THRESHOLD = config.getint('clustering', 'tlsh_threshold')
 TLSH_FAST_CLUSTERING = config.getboolean('clustering', 'tlsh_fast_clustering')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
+CLUSTER_WITH_CONTAINED_PE = config.getboolean('clustering', 'cluster_with_contained_pe')
+LABEL_ON_CONTAINED_PE = config.getboolean('clustering', 'label_on_contained_pe')
 
 def cluster_files(files, clusters):
     """
@@ -56,7 +56,11 @@ def cluster_files(files, clusters):
 def cluster_file(fileinfo, files, clusters):
     """
     TODO: Dokumenter
-    Benyttes under real-time clustering
+    Benyttes under real-time clustering for å clustere én fil
+    
+    TODO: Bør filer under validering clusteres med trege metoder
+    dersom de er alene i alle clustere dannet med raske metoder?
+    Altså kun "fast clusteret" hvis de faktisk havner sammen med andre filer
     """
     fast_cluster_file(fileinfo, clusters)
     if not fileinfo['fast_clustered']:
@@ -286,53 +290,171 @@ def analyse_file_cluster(sha256hashes, files, only_incoming=True):
     cluster_purity = files_in_most_common / cluster_size
     return cluster_purity, cluster_size, most_common_family, files_in_most_common
 
-def label_file(fileinfo, clusters):
+def label_file(fileinfo, files, clusters):
     """
     TODO: Dokumenter
     """
-    if label_file_on_feature(fileinfo, 'imphash', clusters['imphash_clusters']):
-        return
-    elif label_file_on_feature(fileinfo, 'contained_resources', clusters['resource_clusters'], True):
-        return
-    elif label_file_on_feature(fileinfo, 'icon_hash', clusters['icon_clusters']):
-        return
-    elif label_file_on_feature(fileinfo, 'tlsh_cluster', clusters['tlsh_clusters']):
-        return
-    elif fileinfo['contained_pe_files'] and label_file_on_contained_pe(fileinfo):
-        return
-    else:
-        # If no label could be given. TODO: Hva skal gjøres?
-        return
-    # TODO: Bør filer under testing clusteres med trege metoder
-    # dersom de er alene i alle clustere dannet med raske metoder?
-    # Altså kun "fast clusteret" hvis de faktisk havner sammen med andre filer
+    labels = {}
+    feature_keys = [
+        ('imphash', 'imphash_clusters', False),
+        ('contained_resources', 'resource_clusters', True),
+        ('icon_hash', 'icon_clusters', False),
+        ('tlsh_cluster', 'tlsh_clusters', False)
+    ]
 
-def label_file_on_feature(fileinfo, key, feature_clusters, is_a_set=False):
+    for row in feature_keys:
+        fileinfo_key, cluster_key, is_a_set = row
+        label = get_label_on_feature(fileinfo, fileinfo_key, clusters[cluster_key], is_a_set)
+        if label is not None:
+            if label in labels.keys():
+                labels[label] += 1
+            else:
+                labels[label] = 1
+    if labels:
+        fileinfo['given_label'] = max(labels, key=labels.get)
+    elif LABEL_ON_CONTAINED_PE:
+        # Attempt to label on contained PE files 
+        # if no label had been found yet.
+        fileinfo['given_label'] = label_file_on_contained_pe(fileinfo, files)
+
+def get_label_on_feature(fileinfo, key, feature_clusters, is_a_set=False):
     """
     TODO: Dokumenter
     """
     if not fileinfo[key]:
-        # Return false if value is None
-        return False
+        # Return None if no cluster index was found
+        return None
     if is_a_set:
         # if fileinfo[key] is a set of multiple items, 
         # iterate over all potential clusters
+        labels = {}
         for value in fileinfo[key]:
             label = feature_clusters[value]['label']
             if label is not None:
                 # Set label and return True if label was found
-                fileinfo['given_label'] = label
-                return True
+                if label in labels.keys():
+                    labels[label] += 1
+                else:
+                    labels[label] = 1
+        if labels:
+            # Return most common label if any labels were found
+            return max(labels, key=labels.get)
+        else:
+            # Return None if no labels were found
+            return None
     else:
-        # If fileinfo[key] is the lookup key
-        label = feature_clusters[fileinfo[key]]['label']
-        if label is not None:
-            # Set label and return True if label was found
-            fileinfo['given_label'] = label
-            return True
-    
-    # Return false if no label in cluster(s)
-    return False
+        # Return label (or None if no label on cluster)
+        return feature_clusters[fileinfo[key]]['label']
 
-def label_file_on_contained_pe(fileinfo):
-    return False # TODO: implementer
+def label_file_on_contained_pe(fileinfo, files):
+    """
+    TODO: Dokumenter
+    """
+    labels = {}
+    if fileinfo['contained_pe_files']:
+        for sha in fileinfo['contained_pe_files']:
+            label = files[sha]['given_label']
+            if label is not None:
+                if label in labels.keys():
+                    labels[label] += 1
+                else:
+                    labels[label] = 1
+        if labels:
+            # Return most common family among contained pe files
+            return max(labels, key=labels.get)
+    # Return None if no contained files or files did not have labels
+    return None
+
+def analyse_clustered_files(files):
+    """
+    TODO: Dokumenter
+    """
+    total_pe_files = 0
+    incoming_pe_files = 0
+    unpacked_pe_files = 0
+    incoming_unpacked_to_nonpacked = 0
+    obfuscated_pe_files = 0
+    obfuscated_incoming_pe = 0
+    obfuscated_unpacked_pe = 0
+    fast_clustered_files = 0
+    fast_clustered_incoming = 0
+    slow_clustered_files = 0
+    slow_clustered_incoming = 0
+
+    for fileinfo in files.values():
+        total_pe_files += 1
+
+        if fileinfo['fast_clustered']:
+            fast_clustered_files += 1
+        if fileinfo['slow_clustered']:
+            slow_clustered_files += 1
+        
+        if fileinfo['incoming']:
+            incoming_pe_files += 1
+            if fileinfo['unpacks_to_nonpacked_pe']:
+                incoming_unpacked_to_nonpacked += 1
+            if fileinfo['obfuscation'] is not None:
+                obfuscated_pe_files += 1
+                obfuscated_incoming_pe += 1
+            if fileinfo['fast_clustered']:
+                fast_clustered_incoming += 1
+            if fileinfo['slow_clustered']:
+                slow_clustered_incoming += 1
+        else:
+            unpacked_pe_files += 1
+            if fileinfo['obfuscation'] is not None:
+                obfuscated_pe_files += 1
+                obfuscated_unpacked_pe += 1
+    
+    return {
+        'total_pe_files': total_pe_files,
+        'incoming_pe_files': incoming_pe_files,
+        'unpacked_pe_files': unpacked_pe_files,
+        'incoming_unpacked_to_nonpacked': incoming_unpacked_to_nonpacked,
+        'obfuscated_pe_files': obfuscated_pe_files,
+        'obfuscated_incoming_pe': obfuscated_incoming_pe,
+        'obfuscated_unpacked_pe': obfuscated_unpacked_pe,
+        'fast_clustered_files': fast_clustered_files,
+        'fast_clustered_incoming': fast_clustered_incoming,
+        'slow_clustered_files': slow_clustered_files,
+        'slow_clustered_incoming': slow_clustered_incoming
+    }
+
+def analyse_clusters(files, clusters):
+    """
+    TODO: Dokumenter
+    """
+    return {
+        'imphash_cluster_stats': analyse_clusters_on_feature(files, clusters['imphash_clusters']),
+        'icon_cluster_stats': analyse_clusters_on_feature(files, clusters['icon_clusters']),
+        'resource_cluster_stats': analyse_clusters_on_feature(files, clusters['resource_clusters']),
+        'tlsh_cluster_stats': analyse_clusters_on_feature(files, clusters['tlsh_clusters'])
+    }
+
+def analyse_clusters_on_feature(files, feature_clusters):
+    mean_purity = 0
+    mean_size = 0
+    number_of_clusters = 0
+    total_incoming_files_in_clusters = 0
+    
+    for key in feature_clusters.keys():
+        for sha in feature_clusters[key]['items']:
+            if files[sha]['incoming']:
+                total_incoming_files_in_clusters += 1
+        cluster_purity, cluster_size, _, _ = analyse_file_cluster(feature_clusters[key]['items'], files, True)
+        if cluster_size:
+            mean_purity += cluster_purity
+            mean_size += cluster_size
+            number_of_clusters += 1
+    
+    if number_of_clusters:
+        mean_purity = mean_purity / number_of_clusters
+        mean_size = mean_size / number_of_clusters
+    
+    return {
+        'mean_purity': mean_purity,
+        'mean_size': mean_size,
+        'total_incoming_files_in_clusters': total_incoming_files_in_clusters,
+        'number_of_clusters': number_of_clusters
+    }
+

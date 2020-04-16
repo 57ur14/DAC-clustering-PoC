@@ -43,14 +43,14 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
     Analyse a pe-file at the given filepath, add to list of files and return sha256sum
     Can also specify the family the pe belongs to (if known) and the 
     sha256sum of the file that that unpacked the incoming file.
-
+    TODO: oppdater dokumentasjon
     Paramters:
     fullfilepath String: The full path to the file that should be analysed.
     unpacks_from set: A set containing the sha256 checksum of the file this file was unpacked from (or an empty set if this was not unpacked from another file)
     unpacking_set Set: A set of sha256 checkums of the files previously unpacked in the "unpacking chain". Allows detection of loops.
     incoming Boolean: Indicates if the file was really incoming to feature 
         extraction or just unpacked from another PE.
-    family String / None: If it is None, it indicates that the family is unknown.
+    family String: The family (class) the file belongs to.
     training Boolean: Indicates if the file is part of the "training" (training where the family should be known to the algorithm)
     """
 
@@ -88,6 +88,11 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
         # TODO: keep or remove md5? 
         # 'md5': hashlib.md5(rawfile).hexdigest(),
 
+        if training:
+            # If file is in training data set, set
+            # the given label as the provided family
+            fileinfo['given_label'] = family
+
         if not incoming and fileinfo['sha256'] in unpacking_set:
             # Abort if file already is part of the 
             # unpacking chain to avoid infinite recursion.
@@ -99,12 +104,15 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
         try:
             pe = pefile.PE(data=rawfile)
         except Exception:
-            # TODO: Find alternative solution
+            # If file cannot be parsed with pefile, 
+            # extract basic file features and return.
             if incoming:
                 if EXTRACT_ALL_FEATURES or CLUSTER_WITH_TLSH:
                     fileinfo['tlsh'] = tlsh.hash(rawfile)
                 return fileinfo
             else:
+                # If file was not incoming (was unpacked), 
+                # return None (unsuccessful unpacking)
                 return None
 
         pe.parse_data_directories()

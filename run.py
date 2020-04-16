@@ -178,6 +178,7 @@ def collect_features():
         
         # Attempt to retrieve next file and continue loop
         fileinfo = get_fileinfo_from_done_queue(done_queue)
+    # TODO: Analyser clustere og returner resultatet
 
 def cluster_and_validate_incoming():
     """
@@ -226,7 +227,7 @@ def cluster_and_validate_incoming():
             # Cluster the file
             clustering.cluster_file(fileinfo, files, clusters)
             # Label the file
-            clustering.label_file(fileinfo, clusters)
+            clustering.label_file(fileinfo, files, clusters)
             
         if fileinfo['incoming']:
             # Check if correctly labelled and store results
@@ -240,12 +241,13 @@ def cluster_and_validate_incoming():
         
         # Attempt to retrieve next file and continue loop
         fileinfo = get_fileinfo_from_done_queue(done_queue)
-    print("Correctly labelled: " + str(correctly_labelled))
-    print("Incorrectly labelled: " + str(incorrectly_labelled))
-    print("Not labelled: " + str(not_labelled))
-    print("Total files that could be parsed: " + str(incoming_files_parsed))
-    # TODO: Hva med filer som kommer inn, men som ikke kan parses av pefile?
-    # Disse bør telles som "not labelled" og telle med på "number_of_files"
+    # Return statistics:
+    return {
+        'correctly_labelled': correctly_labelled,
+        'incorrectly_labelled': incorrectly_labelled,
+        'not_labelled': not_labelled,
+        'incoming_files_parsed': incoming_files_parsed
+    }
 
 def save_to_pickles(folder):
     """
@@ -340,8 +342,9 @@ if __name__ == '__main__':
             for line in lines:
                 path, fam = line.split(' ')
                 files_for_analysis.append({'path': path, 'family': fam})
+            number_of_files = len(files_for_analysis)
 
-        if not files_for_analysis:
+        if not number_of_files:
             print("No files to analyse")
             raise SystemExit
 
@@ -374,6 +377,12 @@ if __name__ == '__main__':
             clustering.cluster_files(files, clusters)
             # Label the created clusters
             clustering.label_clusters(files, clusters)
+
+            clustering_statistics = clustering.analyse_clustered_files(files)
+            clustering_statistics.update(clustering.analyse_clusters(files, clusters))
+            for key, val in clustering_statistics.items():
+                print(str(key) + ": " + str(val))
+
             # Save updated file information and clusters to pickles.
             save_to_pickles('pickles/clustered/')
     if do_validation:
@@ -381,9 +390,14 @@ if __name__ == '__main__':
         if load_from_pickles('pickles/clustered/', True):
             # Perform feature extraction, cluster and label 
             # files coming from feature extraction job done queue.
-            cluster_and_validate_incoming()
+            validation_statistics = cluster_and_validate_incoming()
+
+            # Calculate number of files not parsed
+            validation_statistics['non_parsed_files'] = number_of_files - validation_statistics['incoming_files_parsed']
+            
+            # Print statistics when done:
+            for key, val in validation_statistics.items():
+                print(str(key) + ": " + str(val))
+            
             # Save updated file information and clusters to pickles
             save_to_pickles('pickles/validated/')
-    if do_extraction or do_validation:
-        # Print this to allow calculation of how many files could not be parsed
-        print("Number of file paths in provided file: " + str(len(files_for_analysis)))
