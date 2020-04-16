@@ -347,7 +347,7 @@ def get_label_on_feature(fileinfo, key, feature_clusters, is_a_set=False):
             # and a number indicating how many clusters had
             # this label and the cluster purity
             most_common_label = max(labels, key=labels.get)
-            return most_common_label, labels[feature_clusters[value]]
+            return most_common_label, labels[most_common_label]
         else:
             # Return None if no labels were found
             return None, None
@@ -370,6 +370,7 @@ def label_file_on_contained_pe(fileinfo, files):
             label = files[sha]['given_label']
             if label is not None:
                 if label in labels.keys():
+                    # TODO: Endre til cluster purity
                     labels[label] += 1
                 else:
                     labels[label] = 1
