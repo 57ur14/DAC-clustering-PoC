@@ -194,6 +194,10 @@ def cluster_and_validate_incoming(files, clusters):
     not_labelled = 0
     labelled_packed = 0
     not_labelled_packed = 0
+    fast_clustered = 0
+    fast_clustered_incoming = 0
+    slow_clustered = 0
+    slow_clustered_incoming = 0
 
     # Attempt to retrieve a file from the done queue
     fileinfo = get_fileinfo_from_done_queue(done_queue)
@@ -225,7 +229,14 @@ def cluster_and_validate_incoming(files, clusters):
             files[fileinfo['sha256']] = fileinfo
 
             # Cluster the file
-            clustering.cluster_file(fileinfo, files, clusters)
+            if clustering.cluster_file(fileinfo, files, clusters):
+                fast_clustered += 1
+                if fileinfo['incoming']:
+                    fast_clustered_incoming += 1
+            else:
+                slow_clustered += 1
+                if fileinfo['incoming']:
+                    slow_clustered_incoming += 1
             # Label the file
             clustering.label_file(fileinfo, files, clusters)
             
@@ -252,7 +263,11 @@ def cluster_and_validate_incoming(files, clusters):
         'not_labelled': not_labelled,
         'not_labelled_packed': not_labelled_packed,
         'labelled_packed': labelled_packed,
-        'incoming_files_parsed': incoming_files_parsed
+        'incoming_files_parsed': incoming_files_parsed,
+        'fast_clustered': fast_clustered,
+        'fast_clustered_incoming': fast_clustered_incoming,
+        'slow_clustered': slow_clustered,
+        'slow_clustered_incoming': slow_clustered_incoming
     }
 
 def save_to_pickles(folder):

@@ -52,16 +52,20 @@ def cluster_file(fileinfo, files, clusters):
     Cluster a provided file. Attempt to cluster using fast features
     and cluster using slow features if fast clustering was unsuccessful.
     
+    Returns True if file was clustered using fast features / clustering
+    methods and False if the file was clustered using slow features/methods.
+
     Used during validation when files are clustered in real-time.
     TODO: Update cluster purity and labels after clustering this file?
-
     """
     if fast_cluster_file(fileinfo, clusters, True):
         fileinfo['fast_clustered'] = True
+        return True
     else:
         # If file was not fast clustered, cluster using slow features
         slow_cluster_file(fileinfo, files, clusters)
         fileinfo['slow_clustered'] = True
+        return False
 
 
 def fast_cluster_file(fileinfo, clusters, only_successful_if_labelled_cluster=False):
