@@ -83,13 +83,13 @@ def feature_extraction_worker(training=False):
                 # Stop when queue is empty
                 break
             else:
-                # TODO: fiks TRAINING (skal være parameter til funksjonen):
                 result = feature_extraction.analyse_file(file_to_cluster['path'], family=file_to_cluster['family'], incoming=True, training=training)
                 send_to_done_queue(result, done_queue)
 
 def send_to_done_queue(fileinfo, done_queue):
     """
-    Recursively send files to the queue of completed feature extraction jobs
+    Recursively send files to the queue of
+    completed feature extraction jobs
     """
     if fileinfo is not None:
         for contained_info in fileinfo['contained_pe_fileinfo'].values():
@@ -115,7 +115,8 @@ def add_files_for_extraction(*file_list):
 
 def get_done_queue():
     """
-    TODO: Dokumenter
+    Retrieve a queue object from a queue manager created
+    with the options provided in the config file.
     """
     done_manager = QueueManager(address=(QUEUE_MANAGER_IP, DONE_MANAGER_PORT), authkey=QUEUE_MANAGER_KEY)
     try:
@@ -127,7 +128,8 @@ def get_done_queue():
 
 def get_fileinfo_from_done_queue(done_queue):
     """
-    TODO: Dokumenter
+    Returns one fileinfo/file feature dictionary from
+    the provided queue object.
     """
     try:
         # Return file metadata the done queue
@@ -139,12 +141,12 @@ def get_fileinfo_from_done_queue(done_queue):
         print("Done-queue empty. Stopping collection.")
         return None
 
-def collect_features():
+def collect_features(files):
     """
-    TODO: Dokumenter
+    Retrieve fileinfo/file feature dictionaries from the
+    feature extraction workers and store the feature
+    information in the global "files" data structure.
     """
-    global files
-    global clusters
 
     incoming_files_parsed = 0
     done_queue = get_done_queue()
@@ -178,22 +180,20 @@ def collect_features():
         
         # Attempt to retrieve next file and continue loop
         fileinfo = get_fileinfo_from_done_queue(done_queue)
-    # TODO: Analyser clustere og returner resultatet
 
-def cluster_and_validate_incoming():
+def cluster_and_validate_incoming(files, clusters):
     """
-    TODO: Dokumenter
+    Cluster and perform validation on files that are in the
+    feature extraction job done queue.
     """
-    global files
-    global clusters
-    # TODO: Cluster litt som under training
-    # Men pass på at 
-    incoming_files_parsed = 0
     done_queue = get_done_queue()
-
+    
+    incoming_files_parsed = 0
     correctly_labelled = 0
     incorrectly_labelled = 0
     not_labelled = 0
+    labelled_packed = 0
+    not_labelled_packed = 0
 
     # Attempt to retrieve a file from the done queue
     fileinfo = get_fileinfo_from_done_queue(done_queue)
@@ -236,8 +236,12 @@ def cluster_and_validate_incoming():
                     correctly_labelled += 1
                 else:
                     incorrectly_labelled += 1
+                if fileinfo['obfuscation']:
+                    labelled_packed += 1
             else:
                 not_labelled += 1
+                if fileinfo['obfuscation'] is not None:
+                    not_labelled_packed += 1
         
         # Attempt to retrieve next file and continue loop
         fileinfo = get_fileinfo_from_done_queue(done_queue)
@@ -246,6 +250,8 @@ def cluster_and_validate_incoming():
         'correctly_labelled': correctly_labelled,
         'incorrectly_labelled': incorrectly_labelled,
         'not_labelled': not_labelled,
+        'not_labelled_packed': not_labelled_packed,
+        'labelled_packed': labelled_packed,
         'incoming_files_parsed': incoming_files_parsed
     }
 
@@ -367,7 +373,7 @@ if __name__ == '__main__':
 
     if do_extraction:
         # Store files coming from feature extraction job done queue.
-        collect_features()
+        collect_features(files)
         # Save file features to pickles
         save_to_pickles('pickles/extracted/')
     if do_clustering:
@@ -390,7 +396,7 @@ if __name__ == '__main__':
         if load_from_pickles('pickles/clustered/', True):
             # Perform feature extraction, cluster and label 
             # files coming from feature extraction job done queue.
-            validation_statistics = cluster_and_validate_incoming()
+            validation_statistics = cluster_and_validate_incoming(files, clusters)
 
             # Calculate number of files not parsed
             validation_statistics['non_parsed_files'] = number_of_files - validation_statistics['incoming_files_parsed']

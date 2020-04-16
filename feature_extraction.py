@@ -40,18 +40,17 @@ CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 
 def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming=False, family=None, training=False):
     """
-    Analyse a pe-file at the given filepath, add to list of files and return sha256sum
-    Can also specify the family the pe belongs to (if known) and the 
-    sha256sum of the file that that unpacked the incoming file.
-    TODO: oppdater dokumentasjon
-    Paramters:
-    fullfilepath String: The full path to the file that should be analysed.
-    unpacks_from set: A set containing the sha256 checksum of the file this file was unpacked from (or an empty set if this was not unpacked from another file)
-    unpacking_set Set: A set of sha256 checkums of the files previously unpacked in the "unpacking chain". Allows detection of loops.
-    incoming Boolean: Indicates if the file was really incoming to feature 
-        extraction or just unpacked from another PE.
-    family String: The family (class) the file belongs to.
-    training Boolean: Indicates if the file is part of the "training" (training where the family should be known to the algorithm)
+    Analyse a pe-file at the given filepath and return a "fileinfo" dictionary
+    containing the features of the file.
+
+    Parameters:
+    - fullfilepath String: The full path to the file that should be analysed.
+    - unpacks_from set: A set containing the sha256 checksum of thefile this file was
+    - unpacked from (or an empty set if this was not unpacked from another file)
+    - unpacking_set Set: A set of sha256 checkums of the files previously unpacked in the "unpacking chain". Allows detection of loops.
+    - incoming Boolean: Indicates if the file was really incoming to feature extraction or just unpacked from another PE.
+    - family String: The family (class) the file belongs to.
+    - training Boolean: Indicates if the file is part of the "training" (training where the family should be known to the algorithm)
     """
 
     if PRINT_PROGRESS:
@@ -85,8 +84,6 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
             'slow_clustered': False,
             'given_label': None
         }
-        # TODO: keep or remove md5? 
-        # 'md5': hashlib.md5(rawfile).hexdigest(),
 
         if training:
             # If file is in training data set, set
@@ -119,7 +116,6 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
         fileinfo['pefile_warnings'] = pe.get_warnings()
         if fileinfo['pefile_warnings']:
             # Simple method of identifying if file seems suspicious
-            # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
             fileinfo['suspicious'] = True
 
         fileinfo['obfuscation'] = unpacking.detect_obfuscation_by_diec(fullfilepath)
@@ -140,7 +136,6 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
                     analysis_result = analyse_file(unpacked_file, unpacks_from=set([fileinfo['sha256']]), unpacking_set=unpacking_set, family=family)
                     if analysis_result is not None:
                         # If file could be parsed by pefile
-                        # TODO: Could just change contained_pe_files to a dict and use .keys()
                         if (analysis_result['obfuscation'] is None
                                 or analysis_result['unpacks_to_nonpacked_pe']):
                             # If contained file is not packed or unpacks to a nonpacked file
@@ -152,7 +147,6 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
                     # If the file is not a pe file or the pe file is corrupt, 
                     # simply add a hash of the unpacked file to "contained resources"
                     fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
-                    # TODO: Delete if config specifies so
         if fileinfo['obfuscation'] is not None or unpacked:
             # If file seems to be packed
             if CLUSTER_PACKED_FILES:
