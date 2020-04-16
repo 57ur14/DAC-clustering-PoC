@@ -247,7 +247,7 @@ def label_clusters_of_specific_feature(feature_clusters, files):
     # Mark clusters with family and purity
     # Only sufficiently pure families with a clear label should be used to label testing files.
     for key in feature_clusters.keys():
-        cluster_purity, cluster_size, most_common_family, files_in_most_common = analyse_file_cluster(feature_clusters[key]['items'], files, True)
+        cluster_purity, cluster_size, most_common_family, _ = analyse_file_cluster(feature_clusters[key]['items'], files, True)
         if (cluster_purity >= MINIMUM_PURITY 
                 or (cluster_size < MINIMUM_REQUIRED_FILES 
                 and cluster_purity >= ABSOLUTE_MINIMUM)):
@@ -294,8 +294,6 @@ def label_file(fileinfo, files, clusters):
     """
     Label a file based on the labels of 
     clusters this file belongs to.
-    TODO: Vurder cluster purity? I stedet for å velge tilfeldig når
-    man har 2 ulike familier fra 2 clustere. Og kanskje også antallet filer.
     """
     labels = {}
     feature_keys = [
@@ -336,12 +334,9 @@ def get_label_on_feature(fileinfo, key, feature_clusters, is_a_set=False):
         # iterate over all potential clusters
         labels = {}
         for value in fileinfo[key]:
-            # TODO: Vurder cluster purity? I stedet for å velge tilfeldig
-            # når man har 2 ulike familier fra 2 clustere. 
-            # Kanskje også vurder størrelse på cluster
             label = feature_clusters[value]['label']
             if label is not None:
-                # Set label and return True if label was found
+                # Store that an occurrence of the current label was found
                 if label in labels.keys():
                     labels[label] += feature_clusters[value]['training_purity']
                 else:
@@ -374,7 +369,9 @@ def label_file_on_contained_pe(fileinfo, files):
             label = files[sha]['given_label']
             if label is not None:
                 if label in labels.keys():
-                    # TODO: Endre til cluster purity
+                    # TODO: Are all contained files
+                    # equally trustworthy?
+                    # Include a quality measure on files?
                     labels[label] += 1
                 else:
                     labels[label] = 1
