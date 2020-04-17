@@ -30,6 +30,7 @@ CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_file
 CLUSTER_WITH_CONTAINED_PE = config.getboolean('clustering', 'cluster_with_contained_pe')
 LABEL_ON_CONTAINED_PE = config.getboolean('clustering', 'label_on_contained_pe')
 CLUSTER_WITH_VHASH = config.getboolean('clustering', 'cluster_with_vhash')
+UPDATE_CLUSTER_LABELS_DURING_VALIDATION = config.getboolean('clustering', 'update_cluster_labels_during_validation')
 
 # Set values for labelling purity
 # TODO: Experiment with different values for minimum purity
@@ -338,7 +339,8 @@ def label_file(fileinfo, files, clusters):
         # Attempt to label on contained PE files 
         # if no label had been found yet.
         fileinfo['given_label'] = label_file_on_contained_pe(fileinfo, files)
-    if fileinfo['given_label'] is not None:
+    if (UPDATE_CLUSTER_LABELS_DURING_VALIDATION
+            and fileinfo['given_label'] is not None):
         for row in feature_keys:
             # For all clusters file can belong to
             fileinfo_key, cluster_key, is_a_set = row
