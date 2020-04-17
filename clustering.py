@@ -31,6 +31,15 @@ CLUSTER_WITH_CONTAINED_PE = config.getboolean('clustering', 'cluster_with_contai
 LABEL_ON_CONTAINED_PE = config.getboolean('clustering', 'label_on_contained_pe')
 CLUSTER_WITH_VHASH = config.getboolean('clustering', 'cluster_with_vhash')
 
+# Set values for labelling purity
+# TODO: Experiment with different values for minimum purity
+LABEL_MINIMUM_PURITY = 0.8
+if LABEL_MINIMUM_PURITY == 1:
+    LABEL_MINIMUM_REQUIRED_FILES = 1
+else:
+    LABEL_MINIMUM_REQUIRED_FILES = 1 / (1 - LABEL_MINIMUM_PURITY)
+LABEL_ABSOLUTE_MINIMUM = 0.51
+
 def cluster_files(files, clusters):
     """
     Create clusters based on file features
@@ -57,7 +66,6 @@ def cluster_file(fileinfo, files, clusters):
     methods and False if the file was clustered using slow features/methods.
 
     Used during validation when files are clustered in real-time.
-    TODO: Update cluster purity and labels after clustering this file?
     """
     if fast_cluster_file(fileinfo, clusters, True):
         fileinfo['fast_clustered'] = True
@@ -79,7 +87,7 @@ def fast_cluster_file(fileinfo, clusters, only_successful_if_labelled_cluster=Fa
     If only_successful_if_labelled_cluster is set to true,
     this function will only return True if the file could be clustered
     with fast features and the file was added to an existing cluster
-    that has a label.    
+    that has a label. This value should be set to True during validation.
     """
     successfully_clustered = False
 
@@ -234,38 +242,39 @@ def cluster_using_tlsh(fileinfo, files, tlsh_clusters):
 
 def label_clusters(files, clusters):
     """
-    Iterate over all cluster types and label the clusters
-    """
-    for feature_type in clusters.keys():
-        # Label all clusters for all feature types
-        label_clusters_of_specific_feature(clusters[feature_type], files)
+    Iterate over all cluster types and all clusters of that type
+    Attempt to label each cluster.
 
-def label_clusters_of_specific_feature(feature_clusters, files):
+    Clusters is a dict containing the dicts with clusters of
+    different feature types.
     """
-    Attempt to label all clusters created with a specific feature.
-    TODO: Attempt with different thresholds for minimum purity
+    # Iterate over all cluster types (imphash, tlsh, icon etc.):
+    for feature_clusters in clusters.values():
+        # Iterate over all clusters of that type:
+        for cluster in feature_clusters.values():
+            # Attempt to label the cluster:
+            label_cluster(cluster, files, True)
+
+def label_cluster(cluster, files, only_evaluate_incoming=True):
     """
-    MINIMUM_PURITY = 0.8
-    if MINIMUM_PURITY == 1:
-        MINIMUM_REQUIRED_FILES = 1
-    else:
-        MINIMUM_REQUIRED_FILES = 1 / (1 - MINIMUM_PURITY)
-    ABSOLUTE_MINIMUM = 0.51
+    Label a given cluster
+
+    The cluster is a dict consisting of 'label' (string), 
+    'training_purity' (float between 0 and 1) and 'items'
+    (set containing the sha256sums of items in the cluster)
+    """
     
-    # Mark clusters with family and purity
-    # Only sufficiently pure families with a clear label should be used to label testing files.
-    for key in feature_clusters.keys():
-        cluster_purity, cluster_size, most_common_family, _ = analyse_file_cluster(feature_clusters[key]['items'], files, True)
-        if (cluster_purity >= MINIMUM_PURITY 
-                or (cluster_size < MINIMUM_REQUIRED_FILES 
-                and cluster_purity >= ABSOLUTE_MINIMUM)):
-            # If cluster is sufficiently pure or there are few 
-            # files in the cluster (but the purity is at least 51%),
-            # label the cluster with the name of the most common family.
-            feature_clusters[key]['label'] = most_common_family
-            feature_clusters[key]['training_purity'] = cluster_purity
-        # If cluster cannot be labelled, the label will remain
-        # as the default value (None)
+    cluster_purity, cluster_size, most_common_family, _ = analyse_file_cluster(cluster['items'], files, True)
+    if (cluster_purity >= LABEL_MINIMUM_PURITY 
+            or (cluster_size < LABEL_MINIMUM_REQUIRED_FILES 
+            and cluster_purity >= LABEL_ABSOLUTE_MINIMUM)):
+        # If cluster is sufficiently pure or there are few 
+        # files in the cluster (but the purity is at least 51%),
+        # label the cluster with the name of the most common family.
+        cluster['label'] = most_common_family
+        cluster['training_purity'] = cluster_purity
+    # If cluster cannot be labelled, the label will remain
+    # as the default value (None)
 
 def analyse_file_cluster(sha256hashes, files, only_incoming=True):
     """
@@ -281,15 +290,15 @@ def analyse_file_cluster(sha256hashes, files, only_incoming=True):
     for sha256 in sha256hashes:
         fileinfo = files[sha256]
         # Only analyse incoming files (unpacked files are not relevant)
-        if fileinfo['incoming'] or only_incoming == False:
-            #print(fileinfo)
+        if fileinfo['incoming'] or not only_incoming:
             cluster_size += 1
-            if fileinfo['family'] not in families_in_cluster.keys():
-                families_in_cluster[fileinfo['family']] = 1
-            else:
-                families_in_cluster[fileinfo['family']] += 1
-    if cluster_size == 0:
-        return 0, 0, '', 0
+            if fileinfo['given_label'] is not None:
+                if fileinfo['given_label'] not in families_in_cluster.keys():
+                    families_in_cluster[fileinfo['given_label']] = 1
+                else:
+                    families_in_cluster[fileinfo['given_label']] += 1
+    if not families_in_cluster:
+        return 0, 0, None, 0
     
     # Retrieve the most common family (might be even, but should not matter)
     most_common_family = max(families_in_cluster, key=families_in_cluster.get)
@@ -302,6 +311,8 @@ def label_file(fileinfo, files, clusters):
     """
     Label a file based on the labels of 
     clusters this file belongs to.
+    If the file was given a label, attempt to update
+    the labels of clusters this file belongs to.
     """
     labels = {}
     feature_keys = [
@@ -327,6 +338,21 @@ def label_file(fileinfo, files, clusters):
         # Attempt to label on contained PE files 
         # if no label had been found yet.
         fileinfo['given_label'] = label_file_on_contained_pe(fileinfo, files)
+    if fileinfo['given_label'] is not None:
+        for row in feature_keys:
+            # For all clusters file can belong to
+            fileinfo_key, cluster_key, is_a_set = row
+            if fileinfo[fileinfo_key]:
+                # If the file has the value, a cluster must exist
+                if is_a_set:
+                    print()
+                    # If the value is a set, iterate over all values in set
+                    for value in fileinfo[fileinfo_key]:
+                        # Attempt to update label of cluster
+                        label_cluster(clusters[cluster_key][value], files, True)
+                else:
+                    # Attempt to update label of cluster
+                    label_cluster(clusters[cluster_key][fileinfo[fileinfo_key]], files, True)
 
 def get_label_on_feature(fileinfo, key, feature_clusters, is_a_set=False):
     """

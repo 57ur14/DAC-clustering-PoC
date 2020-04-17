@@ -213,9 +213,6 @@ def cluster_and_validate_incoming(files, clusters):
             else:       # If file is not incoming (was unpacked from another file)
                 # Update "unpacks_from" since it might be contained in multiple different binaries
                 current_file['unpacks_from'].update(fileinfo['unpacks_from'])
-            if fileinfo['training']:
-                # If file was introduced during training, label file
-                fileinfo['given_label'] = fileinfo['family']
         else:
             # If file has not been received before, add data
             if PRINT_PROGRESS:

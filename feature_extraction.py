@@ -94,7 +94,7 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
 
         if training:
             # If file is in training data set, set
-            # the given label as the provided family
+            # the given label to the provided family name
             fileinfo['given_label'] = family
 
         if not incoming and fileinfo['sha256'] in unpacking_set:
