@@ -407,10 +407,13 @@ if __name__ == '__main__':
             # Perform feature extraction, cluster and label 
             # files coming from feature extraction job done queue.
             validation_statistics = cluster_and_validate_incoming(files, clusters)
-
             # Calculate number of files not parsed
             validation_statistics['non_parsed_files'] = number_of_files - validation_statistics['incoming_files_parsed']
             
+            # Collect statistics on clusters after validation
+            validation_statistics.update(clustering.analyse_clustered_files(files))
+            validation_statistics.update(clustering.analyse_clusters(files, clusters))
+
             # Print statistics when done:
             for key, val in validation_statistics.items():
                 print(str(key) + ": " + str(val))
