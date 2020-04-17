@@ -29,6 +29,7 @@ TLSH_FAST_CLUSTERING = config.getboolean('clustering', 'tlsh_fast_clustering')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
 CLUSTER_WITH_CONTAINED_PE = config.getboolean('clustering', 'cluster_with_contained_pe')
 LABEL_ON_CONTAINED_PE = config.getboolean('clustering', 'label_on_contained_pe')
+CLUSTER_WITH_VHASH = config.getboolean('clustering', 'cluster_with_vhash')
 
 def cluster_files(files, clusters):
     """
@@ -81,6 +82,13 @@ def fast_cluster_file(fileinfo, clusters, only_successful_if_labelled_cluster=Fa
     that has a label.    
     """
     successfully_clustered = False
+
+    if CLUSTER_WITH_VHASH and fileinfo['vhash']:
+        # Cluster with vhash if supposed to an file has a vhash
+        if (cluster_using_equal_values('vhash', fileinfo, clusters['vhash_clusters'])
+                or not only_successful_if_labelled_cluster):
+            successfully_clustered = True
+
 
     if CLUSTER_WITH_RESOURCES and fileinfo['contained_resources']:
         # Cluster with resources if file contained resources
@@ -302,6 +310,8 @@ def label_file(fileinfo, files, clusters):
         ('icon_hash', 'icon_clusters', False),
         ('tlsh_cluster', 'tlsh_clusters', False)
     ]
+    if CLUSTER_WITH_VHASH:
+        feature_keys.append(('vhash', 'vhash_clusters', False))
 
     for row in feature_keys:
         fileinfo_key, cluster_key, is_a_set = row
@@ -443,12 +453,15 @@ def analyse_clusters(files, clusters):
     Analyse all clusters and return a dicionary containing statistics
     describing the speed and quality of the clustering.
     """
-    return {
+    stats = {
         'imphash_cluster_stats': analyse_clusters_on_feature(files, clusters['imphash_clusters']),
         'icon_cluster_stats': analyse_clusters_on_feature(files, clusters['icon_clusters']),
         'resource_cluster_stats': analyse_clusters_on_feature(files, clusters['resource_clusters']),
         'tlsh_cluster_stats': analyse_clusters_on_feature(files, clusters['tlsh_clusters'])
     }
+    if CLUSTER_WITH_VHASH:
+        stats['vhash_cluster_stats'] = analyse_clusters_on_feature(files, clusters['vhash_clusters']),
+    return stats
 
 def analyse_clusters_on_feature(files, feature_clusters):
     """

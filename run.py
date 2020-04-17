@@ -22,15 +22,6 @@ clusters = {
     'tlsh_clusters': {}
 }
 
-"""
-Innhold i hver cluster:
-dict_name[key] = {
-    'label': None,
-    'training_purity': 0,
-    'items': set()
-}
-"""
-
 # Retreive configuration
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -40,6 +31,10 @@ JOB_MANAGER_PORT = config.getint('queue_managers', 'job_port')
 DONE_MANAGER_PORT = config.getint('queue_managers', 'done_port')
 QUEUE_MANAGER_KEY = config.get('queue_managers', 'key').encode('utf-8')
 QUEUE_TIMEOUT = config.getint('queue_managers', 'timeout')
+CLUSTER_WITH_VHASH = config.getboolean('clustering', 'cluster_with_vhash')
+
+if CLUSTER_WITH_VHASH:
+    clusters['vhash_clusters'] = {}
 
 # Define queue manager class
 class QueueManager(BaseManager):
