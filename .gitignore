@@ -1,8 +1,7 @@
 __pycache__/
 *.py[cod]
-
+k-fold-splits/
 config.ini
-*results/
-split_dataset/
+results/
 pickles/
 local/

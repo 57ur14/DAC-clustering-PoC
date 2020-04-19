@@ -347,7 +347,6 @@ def label_file(fileinfo, files, clusters):
             if fileinfo[fileinfo_key]:
                 # If the file has the value, a cluster must exist
                 if is_a_set:
-                    print()
                     # If the value is a set, iterate over all values in set
                     for value in fileinfo[fileinfo_key]:
                         # Attempt to update label of cluster
