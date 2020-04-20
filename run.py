@@ -133,7 +133,8 @@ def get_fileinfo_from_done_queue(done_queue):
         print("Queue not available. Please check if the queue manager is still running.")
         return None
     except queue.Empty:
-        print("Done-queue empty. Stopping collection.")
+        if PRINT_PROGRESS:
+            print("Done-queue empty. Stopping collection.")
         return None
 
 def collect_features(files):
