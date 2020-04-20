@@ -279,7 +279,7 @@ def save_to_pickles(folder):
     global clusters
 
     if not os.path.exists(folder):
-        os.mkdir(folder)
+        os.makedirs(folder)
 
     files_path = os.path.join(folder, 'files.pkl')
     clusters_path = os.path.join(folder, 'clusters.pkl')
@@ -400,7 +400,7 @@ if __name__ == '__main__':
                 print(str(key) + ": " + str(val))
 
             # Save updated file information and clusters to pickles.
-            save_to_pickles('/pickles/clustered/')
+            save_to_pickles('pickles/clustered/')
     if do_validation:
         # Load files and clusters from training
         if load_from_pickles('pickles/clustered/', True):
