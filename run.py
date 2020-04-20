@@ -201,7 +201,8 @@ def cluster_and_validate_incoming(files, clusters):
     while fileinfo is not None:
         if fileinfo['incoming']:
             incoming_files_parsed += 1
-            print("Clustering incoming file number: " + str(incoming_files_parsed))
+            if PRINT_PROGRESS:
+                print("Clustering incoming file number: " + str(incoming_files_parsed))
         # If file was successfully retrieved from queue
         if fileinfo['sha256'] in files.keys():
             # If file has been received and clustered before
@@ -332,6 +333,7 @@ if __name__ == '__main__':
     # Fill list with files that should be sent to analysis
     files_for_analysis = []
     filename = None
+    file_basename = None
     mark_as_training = False
     do_extraction = False
     do_clustering = args.cluster
@@ -361,6 +363,8 @@ if __name__ == '__main__':
         if not number_of_files:
             print("No files to analyse")
             raise SystemExit
+        else:
+            file_basename = os.path.basename(filename)
 
         # If filepaths have been loaded
         # Create queue daemon for files to perform feature extraction on
