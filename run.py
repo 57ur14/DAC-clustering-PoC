@@ -153,7 +153,8 @@ def collect_features(files):
         fileinfo['training'] = True
         if fileinfo['incoming']:
             incoming_files_parsed += 1
-            print("Processing incoming file number: " + str(incoming_files_parsed))
+            if PRINT_PROGRESS:
+                print("Processing incoming file number: " + str(incoming_files_parsed))
         # If file was successfully retrieved from queue
         if fileinfo['sha256'] in files.keys():
             # If file has been received and clustered before
