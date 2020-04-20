@@ -333,7 +333,6 @@ if __name__ == '__main__':
     # Fill list with files that should be sent to analysis
     files_for_analysis = []
     filename = None
-    file_basename = None
     mark_as_training = False
     do_extraction = False
     do_clustering = args.cluster
@@ -363,8 +362,6 @@ if __name__ == '__main__':
         if not number_of_files:
             print("No files to analyse")
             raise SystemExit
-        else:
-            file_basename = os.path.basename(filename)
 
         # If filepaths have been loaded
         # Create queue daemon for files to perform feature extraction on
@@ -388,7 +385,6 @@ if __name__ == '__main__':
         collect_features(files)
         # Save file features to pickles
         save_to_pickles('pickles/extracted/')
-        save_to_pickles('/pickles/' + filename + '/extracted/')
     if do_clustering:
         # Load file features from pickles
         if do_extraction or load_from_pickles('pickles/extracted/'):
@@ -404,7 +400,6 @@ if __name__ == '__main__':
 
             # Save updated file information and clusters to pickles.
             save_to_pickles('/pickles/clustered/')
-            save_to_pickles('/pickles/' + filename + '/clustered/')
     if do_validation:
         # Load files and clusters from training
         if load_from_pickles('pickles/clustered/', True):
@@ -424,4 +419,3 @@ if __name__ == '__main__':
             
             # Save updated file information and clusters to pickles
             save_to_pickles('pickles/validated/')
-            save_to_pickles('/pickles/' + filename + '/validated/')
