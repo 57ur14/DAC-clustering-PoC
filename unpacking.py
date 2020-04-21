@@ -193,8 +193,6 @@ def clam_unpack(filepath, tmpdir):
                     newpath = os.path.join(UNPACKED_DIRECTORY, newfilename)
                     shutil.move(oldpath, newpath)
                 else:
-                    # Move file to root of temporary directory if it
-                    # should be deleted after extracting features.
                     newpath = os.path.join(root, filename)
                 unpacked.append(newpath)
         return unpacked
