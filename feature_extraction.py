@@ -66,9 +66,12 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
         else:
             print('Extracting features from ' + fullfilepath + ' (' + family + ')')
 
-    with open(fullfilepath, 'rb') as filehandle:
-        rawfile = filehandle.read()
-
+    try:
+        with open(fullfilepath, 'rb') as filehandle:
+            rawfile = filehandle.read()
+    except FileNotFoundError:
+        return None
+    else:
         fileinfo = {
             'fullpath': fullfilepath,
             'sha256': hashlib.sha256(rawfile).hexdigest(),
