@@ -134,32 +134,29 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
         fileinfo['obfuscation'] = unpacking.detect_obfuscation_by_diec(fullfilepath)
         
         # Create a temporary directory unique to this process
-        # This object must survive until this function is done
-        # to avoid file being deleted before being analysed.
-        tmpfile_object = tempfile.TemporaryDirectory()
-        tmpdir = tmpfile_object.name
-        
-        # Attempt to unpack the packed file regardless of detected obfuscation
-        unpacked = unpacking.unpack_file(fullfilepath, tmpdir)
+        # for unpacking contained files
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Attempt to unpack the packed file regardless of detected obfuscation
+            unpacked = unpacking.unpack_file(fullfilepath, tmpdir)
 
-        for unpacked_file in unpacked:              # For all unpacked files
-                if (filetype.guess_mime(unpacked_file) == 'application/x-msdownload'
-                        and (EXTRACT_ALL_FEATURES or CLUSTER_WITH_CONTAINED_PE)):
-                    # Check if the file is an "exe" (pe file) and analyse it if so
-                    analysis_result = analyse_file(unpacked_file, unpacks_from=set([fileinfo['sha256']]), unpacking_set=unpacking_set, family=family)
-                    if analysis_result is not None:
-                        # If file could be parsed by pefile
-                        if (analysis_result['obfuscation'] is None
-                                or analysis_result['unpacks_to_nonpacked_pe']):
-                            # If contained file is not packed or unpacks to a nonpacked file
-                            # Mark this file as "unpacks to nonpacked pe"
-                            fileinfo['unpacks_to_nonpacked_pe'] = True
-                        fileinfo['contained_pe_files'].add(analysis_result['sha256'])
-                        fileinfo['contained_pe_fileinfo'][analysis_result['sha256']] = analysis_result
-                elif EXTRACT_ALL_FEATURES or CLUSTER_WITH_RESOURCES:
-                    # If the file is not a pe file or the pe file is corrupt, 
-                    # simply add a hash of the unpacked file to "contained resources"
-                    fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
+            for unpacked_file in unpacked:              # For all unpacked files
+                    if (filetype.guess_mime(unpacked_file) == 'application/x-msdownload'
+                            and (EXTRACT_ALL_FEATURES or CLUSTER_WITH_CONTAINED_PE)):
+                        # Check if the file is an "exe" (pe file) and analyse it if so
+                        analysis_result = analyse_file(unpacked_file, unpacks_from=set([fileinfo['sha256']]), unpacking_set=unpacking_set, family=family)
+                        if analysis_result is not None:
+                            # If file could be parsed by pefile
+                            if (analysis_result['obfuscation'] is None
+                                    or analysis_result['unpacks_to_nonpacked_pe']):
+                                # If contained file is not packed or unpacks to a nonpacked file
+                                # Mark this file as "unpacks to nonpacked pe"
+                                fileinfo['unpacks_to_nonpacked_pe'] = True
+                            fileinfo['contained_pe_files'].add(analysis_result['sha256'])
+                            fileinfo['contained_pe_fileinfo'][analysis_result['sha256']] = analysis_result
+                    elif EXTRACT_ALL_FEATURES or CLUSTER_WITH_RESOURCES:
+                        # If the file is not a pe file or the pe file is corrupt, 
+                        # simply add a hash of the unpacked file to "contained resources"
+                        fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
         if fileinfo['obfuscation'] is not None or unpacked:
             # If file seems to be packed
             if CLUSTER_PACKED_FILES:
