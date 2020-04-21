@@ -65,7 +65,10 @@ def get_diec_output(filepath):
         time.sleep(300)
         return get_diec_output(filepath)
     else:
-        diec_output = diec_process.stdout.decode('utf-8')
+        try:
+            diec_output = diec_process.stdout.decode('utf-8')
+        except UnicodeDecodeError:
+            diec_output = ''
         for line in diec_output.splitlines():
             if line[0:12] == 'PE: packer: ':
                 info['packer'] = line[12:]
