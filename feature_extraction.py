@@ -177,9 +177,6 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
         if EXTRACT_ALL_FEATURES or CLUSTER_WITH_ICON:
             # Extract icon if supposed to use icon
             fileinfo['icon_hash'] = get_icon_hash(pe)
-
-        # Ensure that the temporary directory is deleted
-        tmpfile_object.cleanup()
         return fileinfo
     return None                               # Return None on failure
 
