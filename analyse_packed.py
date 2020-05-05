@@ -198,9 +198,5 @@ if __name__ == '__main__':
 
         result = collect_features(files)
 
-        # TODO: Remove?
-        print(result)
-        print("")
-
         for key, value in result.items():
             print(str(key) + ": " + str(value))
