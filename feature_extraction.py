@@ -9,8 +9,7 @@ Copyright (c) 2020 Sturla Høgdahl Bae
 External dependencies:
 * filetype:             pip3 install filetype
 * pefile:               pip3 install pefile
-* dhash:                pip3 install dhash
-* pillow:               pip3 install pillow
+* xxhash:               pip3 install xxhash
 * tlsh:                 https://github.com/trendmicro/tlsh
 * pefile-extract-icon:  https://github.com/ntnu-rgb/pefile-extract-icon
 """
@@ -20,18 +19,14 @@ import hashlib
 import os
 import shutil
 import tempfile
-from io import BytesIO
 
 import filetype
 import pefile
 import tlsh
-import dhash
-from PIL import Image, UnidentifiedImageError
+import xxhash
 
 import extract_icon
 import unpacking
-
-dhash.force_pil()
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -193,24 +188,14 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
 
 def get_icon_hash(pefile_pe):
     """
-    Retrieve a dhash of the icon a Windows system would prefer to use.
+    Retrieve a hash of the icon a Windows system would prefer to use.
     Returns None if no RT_GROUP_ICON was found or the icon could not be extracted properly.
-    Uses dhash and PIL to generate the dhash (perceptual hash)
+    Uses xxhash to retrieve a hash that is fast to calculate and with good uniqueness.
     """
     extract = extract_icon.ExtractIcon(pefile_pe=pefile_pe)
     raw = extract.get_raw_windows_preferred_icon()
-
     if raw is not None:
-        stream = BytesIO(raw)
-        try:
-            image = Image.open(stream)
-        except ValueError:
-            return None
-        except UnidentifiedImageError:
-            return None
-        else:
-            row, col = dhash.dhash_row_col(image)
-            return dhash.format_hex(row, col)
+        return xxhash.xxh64_digest(raw)
     else:
         return None
 
