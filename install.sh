@@ -3,7 +3,7 @@
 
 sudo apt-get update
 sudo apt-get install -y gcc cmake python3 python3-pip python-dev unzip clamav libclamunrar9
-sudo pip3 install filetype pyhash pillow pefile
+sudo pip3 install filetype pillow pefile
 
 currentDir=$(pwd)
 mkdir $HOME/.dac-tools
