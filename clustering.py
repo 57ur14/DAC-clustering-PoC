@@ -354,7 +354,8 @@ def label_file(fileinfo, files, clusters):
     If the file was given a label, attempt to update
     the labels of clusters this file belongs to.
     """
-    labels = {}
+    best_purity = 0
+    best_label = None
     feature_keys = [
         ('imphash', 'imphash_clusters', False),
         ('contained_resources', 'resource_clusters', True),
@@ -367,17 +368,16 @@ def label_file(fileinfo, files, clusters):
     for row in feature_keys:
         fileinfo_key, cluster_key, is_a_set = row
         label, purity = get_label_on_feature(fileinfo, fileinfo_key, clusters[cluster_key], is_a_set)
-        if label is not None:
-            if label in labels.keys():
-                labels[label] += purity
-            else:
-                labels[label] = purity
-    if labels:
-        fileinfo['given_label'] = max(labels, key=labels.get)
+        if label is not None and purity > best_purity:
+            best_label = label
+    
+    if best_label is not None:
+        fileinfo['given_label'] = best_label
     elif LABEL_ON_CONTAINED_PE:
         # Attempt to label on contained PE files 
         # if no label had been found yet.
         fileinfo['given_label'] = label_file_on_contained_pe(fileinfo, files)
+    
     if (UPDATE_CLUSTER_LABELS_DURING_VALIDATION
             and fileinfo['given_label'] is not None):
         for row in feature_keys:
