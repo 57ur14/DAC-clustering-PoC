@@ -30,6 +30,7 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 PRINT_PROGRESS = config.getboolean('general', 'print_progress')
 EXTRACT_ALL_FEATURES = config.getboolean('feature_extraction', 'extract_all_features')
+ATTEMPT_UNPACKING = config.getboolean('feature_extraction', 'attempt_unpacking')
 ATTEMPT_UNPACK_ALL_FILES = config.getboolean('feature_extraction', 'attempt_unpack_all_files')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
@@ -136,7 +137,9 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
         
         unpacked = []
         # If file is detected as being packed or one should attemp unpacking on all files
-        if fileinfo['obfuscation'] is not None or ATTEMPT_UNPACK_ALL_FILES:
+        if (ATTEMPT_UNPACKING
+                and (fileinfo['obfuscation'] is not None 
+                or ATTEMPT_UNPACK_ALL_FILES)):
             # Create a temporary directory unique to this process
             # for unpacking contained files
             tmpdir = tempfile.mkdtemp(prefix='unpack-dir-')
