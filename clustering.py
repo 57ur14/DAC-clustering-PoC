@@ -32,15 +32,6 @@ LABEL_ON_CONTAINED_PE = config.getboolean('clustering', 'label_on_contained_pe')
 CLUSTER_WITH_VHASH = config.getboolean('clustering', 'cluster_with_vhash')
 UPDATE_CLUSTER_LABELS_DURING_VALIDATION = config.getboolean('clustering', 'update_cluster_labels_during_validation')
 
-# Set values for labelling purity
-# TODO: Experiment with different values for minimum purity
-LABEL_MINIMUM_PURITY = 0.8
-if LABEL_MINIMUM_PURITY == 1:
-    LABEL_MINIMUM_REQUIRED_FILES = 1
-else:
-    LABEL_MINIMUM_REQUIRED_FILES = 1 / (1 - LABEL_MINIMUM_PURITY)
-LABEL_ABSOLUTE_MINIMUM = 0.51
-
 def cluster_files(files, clusters):
     """
     Create clusters based on file features
@@ -287,6 +278,29 @@ def label_clusters(files, clusters):
             # Attempt to label the cluster:
             label_cluster(cluster, files, True)
 
+def is_good_cluster(purity, size):
+    """
+    If cluster is sufficiently pure or there are few 
+    files in the cluster (but the purity is at least 51%),
+    return True. If not, return False.
+    """
+
+    # Set values for labelling purity
+    # TODO: Experiment with different values for minimum purity
+    LABEL_MINIMUM_PURITY = 0.8
+    if LABEL_MINIMUM_PURITY == 1:
+        LABEL_MINIMUM_REQUIRED_FILES = 1
+    else:
+        LABEL_MINIMUM_REQUIRED_FILES = 1 / (1 - LABEL_MINIMUM_PURITY)
+    LABEL_ABSOLUTE_MINIMUM = 0.51
+
+    if (purity >= LABEL_MINIMUM_PURITY 
+            or (size < LABEL_MINIMUM_REQUIRED_FILES 
+            and purity >= LABEL_ABSOLUTE_MINIMUM)):
+        return True
+    else:
+        return False
+
 def label_cluster(cluster, files, only_evaluate_incoming=True):
     """
     Label a given cluster
@@ -298,16 +312,12 @@ def label_cluster(cluster, files, only_evaluate_incoming=True):
     """
     
     cluster_purity, cluster_size, most_common_family, _ = analyse_file_cluster(cluster['items'], files, True)
-    if (cluster_purity >= LABEL_MINIMUM_PURITY 
-            or (cluster_size < LABEL_MINIMUM_REQUIRED_FILES 
-            and cluster_purity >= LABEL_ABSOLUTE_MINIMUM)):
-        # If cluster is sufficiently pure or there are few 
-        # files in the cluster (but the purity is at least 51%),
-        # label the cluster with the name of the most common family.
+    if is_good_cluster(cluster_purity, cluster_size):
+        # Label if quality of cluster is sufficiently good
         cluster['label'] = most_common_family
         cluster['training_purity'] = cluster_purity
         return True
-    # If cluster cannot be labelled, the label will remain
+    # If quality of cluster is poor, the label will remain
     # as the default value (None)
     return False
 
