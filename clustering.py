@@ -271,11 +271,6 @@ def update_tlsh_centroid(centroid, tlsh_clusters, files):
             tlsh_clusters[new_centroid] = tlsh_clusters[centroid]
             tlsh_clusters.pop(centroid)
 
-            print("Cluster with new centroid: ")
-            print(tlsh_clusters.get(new_centroid))
-            print("Cluster with old centroid: ")
-            print(tlsh_clusters.get(centroid))
-
 
 def label_clusters(files, clusters):
     """
