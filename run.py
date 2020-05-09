@@ -328,7 +328,7 @@ if __name__ == '__main__':
     parser.add_argument('-E', '--extraction-list', help='Path to a text file containing filepaths to files that should have their features extracted (for clustering), where each line consists of <path> <family>. Path must not contain any spaces.')
     parser.add_argument('-C', '--cluster', action='store_true', help='Do clustering on files where features have been extracted.')
     parser.add_argument('-T', '--train-list', help='Equivalent of -E <filename> -C. Path to a text file containing filepaths to files in training set, where each line consists of <path> <family>. Path must not contain any spaces.')
-    parser.add_argument('-V', '--validation-list', help='Path to a text file containing filepaths to files in validation set, where each line consists of <path> <family>. Path must not contain any spaces.')
+    parser.add_argument('-V', '--validation-list', help='Path to a text file containing filepaths to files in validation (testing) set, where each line consists of <path> <family>. Path must not contain any spaces.')
     args = parser.parse_args()
 
     # Fill list with files that should be sent to analysis

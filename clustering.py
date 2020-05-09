@@ -181,65 +181,101 @@ def cluster_using_equal_values(key, fileinfo, cluster):
 
 def cluster_using_tlsh(fileinfo, files, tlsh_clusters):
     """
-    Cluster a file using tlsh by calcualting a distance score
-    between this file and all other files. Add this file to the 
-    cluster of the file that was the best match.
-    If no file was found to match, create a new cluster.
+    Cluster a file using tlsh.
+    If no cluster matched, create a new cluster.
     Returns True if this file was added to an existing cluster
     with a label and False if not.
     """
     best_score = TLSH_THRESHOLD + 1
     best_cluster = None
 
-    if TLSH_FAST_CLUSTERING:
-        # If fast TLSH clustering (compare with first file in each cluster)
-        for root_value in tlsh_clusters.keys():
-            score = tlsh.diff(fileinfo['tlsh'], root_value)
-            if score < best_score:
-                best_score = score
-                best_cluster = root_value
-    else:
-        # If not fast TLSH clustering (compare with all files)
-        for otherfile in files.values():
-            if (otherfile['tlsh'] is not None 
-                    and fileinfo['sha256'] != otherfile['sha256']):
-                # Calculate distance
-                score = tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])
-                # If distance is lower than previous best
-                if score < best_score:
-                    # Store new values
-                    best_score = score
-                    best_cluster = otherfile['tlsh_cluster']
+    for centroid in tlsh_clusters.keys():
+        score = tlsh.diff(fileinfo['tlsh'], centroid)
+        if score < best_score:
+            best_cluster = centroid
+            best_score = score
+    
     if best_cluster is not None:
-        # If matching file/cluster was found, add to cluster
+        # Add this file to the the best matching cluster
         tlsh_clusters[best_cluster]['items'].add(fileinfo['sha256'])
         fileinfo['tlsh_cluster'] = best_cluster
-        if tlsh_clusters[best_cluster]['label'] is not None:
-            return True
+        has_label = tlsh_clusters[best_cluster]['label'] is not None
     else:
-        # Create new tlsh cluster if no suitable cluster was found
-        tlsh_clusters[fileinfo['tlsh']] = {
+        # If no cluster was found to match, create
+        # new cluster with this file as centroid
+        best_cluster = fileinfo['tlsh']
+        tlsh_clusters[best_cluster] = {
             'label': None,
             'training_purity': 0,
             'items': set()
         }
-        tlsh_clusters[fileinfo['tlsh']]['items'].add(fileinfo['sha256'])
-        fileinfo['tlsh_cluster'] = fileinfo['tlsh']
+        tlsh_clusters[best_cluster]['items'].add(fileinfo['sha256'])
+        fileinfo['tlsh_cluster'] = best_cluster
+
+        # Iterate over all other files that are not in a TLSH cluster
+        for otherfile in files.values():
+            if (otherfile['tlsh'] is not None
+                    and otherfile['tlsh_cluster'] is None
+                    and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh']) <= TLSH_THRESHOLD):
+                # If distance is less than or equal to threshold,
+                # add the other file to the new cluster
+                tlsh_clusters[best_cluster]['items'].add(otherfile['sha256'])
+                otherfile['tlsh_cluster'] = best_cluster
         
-        if TLSH_FAST_CLUSTERING:
-            # If fast clustering, check distance to all files not
-            # in any cluster (since they have not been compared
-            # to this new root node and might match).
-            for otherfile in files.values():
-                # For all files not in any tlsh cluster
-                if (otherfile['tlsh']
-                        and not otherfile['tlsh_cluster']
-                        and fileinfo['sha256'] != otherfile['sha256']
-                        and tlsh.diff(fileinfo['tlsh'], otherfile['tlsh']) <= TLSH_THRESHOLD):
-                    # Add other files to this new cluster if they match
-                    tlsh_clusters[fileinfo['tlsh']]['items'].add(otherfile['sha256'])
-                    otherfile['tlsh_cluster'] = fileinfo['tlsh_cluster']
-        return False
+        # Attempt to label the cluster and store if it has label
+        has_label = label_cluster(tlsh_clusters[best_cluster], files, True)
+    
+    if not TLSH_FAST_CLUSTERING:
+        update_tlsh_centroid(best_cluster, tlsh_clusters, files)
+    return has_label
+
+def update_tlsh_centroid(centroid, tlsh_clusters, files):
+    """
+    Update the centroid of a TLSH cluster if another file
+    is more central than the first node that was added.
+    Uses closeness centrality to determine the most central node,
+    since there is no easy method for finding a an arbitrary value
+    that is a true central point in the cluster for TLSH hashes.
+
+    Calculating closeness centrality: https://en.wikipedia.org/wiki/Centrality#Closeness_centrality
+    """
+    cluster = tlsh_clusters[centroid]
+
+    # No point in updating if two
+    # or fewer items in cluster.
+    if len(cluster['items']) > 2:
+        minimum_centrality = 0
+
+        for sha256 in cluster['items']:
+            # For each item in the cluster
+            fileinfo = files[sha256]
+            distance_sum = 0
+            for othersha in cluster['items']:
+                otherfile = files[othersha]
+                if fileinfo != otherfile:
+                    # Summarise distance to all other items in cluster
+                    distance_sum = tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])
+            # Calculate closeness centrality (higher closeness is better)
+            centrality = 1 / distance_sum
+            if centrality > minimum_centrality:
+                minimum_centrality = centrality
+                new_centroid = fileinfo['tlsh']
+        
+        # Update centroid if another item is more central
+        if new_centroid != centroid:
+            for sha256 in cluster['items']:
+                # Iterate over all files in the cluster and
+                # update which cluster the file belongs to.
+                files[sha256]['tlsh_cluster'] = new_centroid
+            # Update move to new key in the dictionary
+            tlsh_clusters[new_centroid] = tlsh_clusters[centroid]
+            tlsh_clusters.pop(centroid)
+
+            print("Cluster with new centroid: ")
+            print(tlsh_clusters.get(new_centroid))
+            print("Cluster with old centroid: ")
+            print(tlsh_clusters.get(centroid))
+
 
 def label_clusters(files, clusters):
     """
@@ -263,6 +299,7 @@ def label_cluster(cluster, files, only_evaluate_incoming=True):
     The cluster is a dict consisting of 'label' (string), 
     'training_purity' (float between 0 and 1) and 'items'
     (set containing the sha256sums of items in the cluster)
+    Returns True if a label was determined and False if not.
     """
     
     cluster_purity, cluster_size, most_common_family, _ = analyse_file_cluster(cluster['items'], files, True)
@@ -274,8 +311,10 @@ def label_cluster(cluster, files, only_evaluate_incoming=True):
         # label the cluster with the name of the most common family.
         cluster['label'] = most_common_family
         cluster['training_purity'] = cluster_purity
+        return True
     # If cluster cannot be labelled, the label will remain
     # as the default value (None)
+    return False
 
 def analyse_file_cluster(sha256hashes, files, only_incoming=True):
     """

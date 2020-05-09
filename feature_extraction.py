@@ -9,7 +9,6 @@ Copyright (c) 2020 Sturla Høgdahl Bae
 External dependencies:
 * filetype:             pip3 install filetype
 * pefile:               pip3 install pefile
-* xxhash:               pip3 install xxhash
 * tlsh:                 https://github.com/trendmicro/tlsh
 * pefile-extract-icon:  https://github.com/ntnu-rgb/pefile-extract-icon
 """
@@ -23,7 +22,6 @@ import tempfile
 import filetype
 import pefile
 import tlsh
-import xxhash
 
 import extract_icon
 import unpacking
@@ -32,6 +30,7 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 PRINT_PROGRESS = config.getboolean('general', 'print_progress')
 EXTRACT_ALL_FEATURES = config.getboolean('feature_extraction', 'extract_all_features')
+ATTEMPT_UNPACK_ALL_FILES = config.getboolean('feature_extraction', 'attempt_unpack_all_files')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
@@ -134,34 +133,37 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
 
         fileinfo['obfuscation'] = unpacking.detect_obfuscation_by_diec(fullfilepath)
         
-        # Create a temporary directory unique to this process
-        # for unpacking contained files
-        tmpdir = tempfile.mkdtemp(prefix='unpack-dir-')
+        
+        unpacked = []
+        # If file is detected as being packed or one should attemp unpacking on all files
+        if fileinfo['obfuscation'] is not None or ATTEMPT_UNPACK_ALL_FILES:
+            # Create a temporary directory unique to this process
+            # for unpacking contained files
+            tmpdir = tempfile.mkdtemp(prefix='unpack-dir-')
 
-        # Attempt to unpack the packed file regardless of detected obfuscation
-        unpacked = unpacking.unpack_file(fullfilepath, tmpdir)
-
-        for unpacked_file in unpacked:              # For all unpacked files
-                if (filetype.guess_mime(unpacked_file) == 'application/x-msdownload'
-                        and (EXTRACT_ALL_FEATURES or CLUSTER_WITH_CONTAINED_PE)):
-                    # Check if the file is an "exe" (pe file) and analyse it if so
-                    analysis_result = analyse_file(unpacked_file, unpacks_from=set([fileinfo['sha256']]), unpacking_set=unpacking_set, family=family)
-                    if analysis_result is not None:
-                        # If file could be parsed by pefile
-                        if (analysis_result['obfuscation'] is None
-                                or analysis_result['unpacks_to_nonpacked_pe']):
-                            # If contained file is not packed or unpacks to a nonpacked file
-                            # Mark this file as "unpacks to nonpacked pe"
-                            fileinfo['unpacks_to_nonpacked_pe'] = True
-                        fileinfo['contained_pe_files'].add(analysis_result['sha256'])
-                        fileinfo['contained_pe_fileinfo'][analysis_result['sha256']] = analysis_result
-                elif EXTRACT_ALL_FEATURES or CLUSTER_WITH_RESOURCES:
-                    # If the file is not a pe file or the pe file is corrupt, 
-                    # simply add a hash of the unpacked file to "contained resources"
-                    fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
-        # Delete temporary directory (with contents) 
-        # when it is no longer needed.
-        shutil.rmtree(tmpdir)
+            # Attempt to unpack the packed file regardless of detected obfuscation
+            unpacked = unpacking.unpack_file(fullfilepath, tmpdir)
+            for unpacked_file in unpacked:              # For all unpacked files
+                    if (filetype.guess_mime(unpacked_file) == 'application/x-msdownload'
+                            and (EXTRACT_ALL_FEATURES or CLUSTER_WITH_CONTAINED_PE)):
+                        # Check if the file is an "exe" (pe file) and analyse it if so
+                        analysis_result = analyse_file(unpacked_file, unpacks_from=set([fileinfo['sha256']]), unpacking_set=unpacking_set, family=family)
+                        if analysis_result is not None:
+                            # If file could be parsed by pefile
+                            if (analysis_result['obfuscation'] is None
+                                    or analysis_result['unpacks_to_nonpacked_pe']):
+                                # If contained file is not packed or unpacks to a nonpacked file
+                                # Mark this file as "unpacks to nonpacked pe"
+                                fileinfo['unpacks_to_nonpacked_pe'] = True
+                            fileinfo['contained_pe_files'].add(analysis_result['sha256'])
+                            fileinfo['contained_pe_fileinfo'][analysis_result['sha256']] = analysis_result
+                    elif EXTRACT_ALL_FEATURES or CLUSTER_WITH_RESOURCES:
+                        # If the file is not a pe file or the pe file is corrupt, 
+                        # simply add a hash of the unpacked file to "contained resources"
+                        fileinfo['contained_resources'].add(os.path.basename(unpacked_file))
+            # Delete temporary directory (with contents) 
+            # when it is no longer needed.
+            shutil.rmtree(tmpdir)
         
         if fileinfo['obfuscation'] is not None or unpacked:
             # If file seems to be packed
@@ -195,7 +197,7 @@ def get_icon_hash(pefile_pe):
     extract = extract_icon.ExtractIcon(pefile_pe=pefile_pe)
     raw = extract.get_raw_windows_preferred_icon()
     if raw is not None:
-        return xxhash.xxh64_digest(raw)
+        return hashlib.sha256(raw).digest()
     else:
         return None
 
