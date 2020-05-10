@@ -160,7 +160,7 @@ def label_cluster_and_files(label, cluster, files, clusters):
 if __name__ == '__main__':
     successfully_loaded = load_from_pickles('pickles/validated/', True)
     if not successfully_loaded:
-        print("Run training (-T or -E and -C) and validation (-V) first")       
+        print("Run training (-T or -E + -C) and validation (-V) first")       
         raise SystemExit
     
     num_files_to_label = total_files_to_label(files)
