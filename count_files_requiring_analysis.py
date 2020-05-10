@@ -165,13 +165,10 @@ if __name__ == '__main__':
     
     num_files_to_label = total_files_to_label(files)
     files_analysed_in_depth = 0
-
-    print("Number of files to label before: " + str(num_files_to_label))
-    
-    # Measure how correc the labelling performed
-    # through induction is.
     correctly_labelled = 0
     mislabelled = 0
+
+    print("Number of files to label before: " + str(num_files_to_label))
 
     still_more = True
 
