@@ -3,6 +3,7 @@
 
 import os
 import pickle
+from multiprocessing import Pool
 
 files = {}
 clusters = {
@@ -68,6 +69,25 @@ def total_files_to_label(files):
             total += 1
     return total
 
+def is_good_quality(cluster):
+    
+            # TODO: Evaluate cluster quality
+
+            incoming, unlabelled, packed = labelling_stats(cluster)
+            labelled = incoming - unlabelled
+            
+            if (incoming == 0
+                    or cluster['label'] is not None 
+                    or unlabelled < labelled):
+                return False, incoming, packed, unlabelled, labelled
+            #elif cluster['packed_incoming'] == cluster['total_incoming']:
+            # If the above statement is not true, but the number of packed
+            # files is equal to the size of the cluster, the cluster
+            # is likely of poor quality.
+            #    continue
+            else:
+                return True, incoming, packed, unlabelled, labelled
+
 def get_unlabelled(cluster):
     return cluster['unlabelled_files']
 
@@ -92,38 +112,20 @@ if __name__ == '__main__' and load_from_pickles('pickles/validated/', True):
 
     while still_more:
         cluster_list = []
-
-        # Create list consisting of all clusters from all cluster types
+        
         for cluster_type in clusters.values():
             for cluster in cluster_type.values():
-                # TODO: Evaluate cluster quality
-
-                incoming, unlabelled, packed = labelling_stats(cluster)
-                cluster['total_incoming'] = incoming
-                cluster['packed_incoming'] = packed
-                cluster['unlabelled_files'] = unlabelled
-                cluster['labelled_files'] = incoming - unlabelled
-                
-                if (cluster['label'] is not None 
-                        or cluster['unlabelled_files'] < cluster['labelled_files']):
-                    # If cluster has a label or there are more labelled 
-                    # than unlabelled files, cluster is likely of poor quality, 
-                    # or all fles are labelled.
-                    continue
-                #elif cluster['packed_incoming'] == cluster['total_incoming']:
-                # If the above statement is not true, but the number of packed
-                # files is equal to the size of the cluster, the cluster
-                # is likely of poor quality.
-                #    continue
-                else:
-                    # If the cluster does not seem to be of poor quality,
-                    # add to cluster where representative files are analysed.
+                good_quality, incoming, packed, unlabelled, labelled = is_good_quality(cluster)
+                if good_quality:
+                    cluster['total_incoming'] = incoming
+                    cluster['packed_incoming'] = packed
+                    cluster['unlabelled_files'] = unlabelled
+                    cluster['labelled_files'] = labelled
                     cluster_list.append(cluster)
         
         cluster_list.sort(key=get_unlabelled)
-        
-        # TODO: Sort list?
 
+        
         if cluster_list:
             prioritised = cluster_list.pop()
         else:
@@ -136,29 +138,31 @@ if __name__ == '__main__' and load_from_pickles('pickles/validated/', True):
                 if fileinfo['obfuscation'] is None:
                     # Representative file should ideally
                     # not be obfuscated
-                    representative = files[sha]
+                    representative = fileinfo
                     break
                 elif representative is None:
                     # If no non-obfuscated file was available,
                     # use an obfuscated file as representative file.
                     representative = fileinfo
-        
+
         # If an representative file was identified (should be true)
         if representative is not None:
             label = get_label_from_in_depth_analysis(representative)
             representative['given_label'] = label
             files_analysed_in_depth += 1
+            
             num_files_to_label -= 1
             prioritised['label'] = label
             for sha in prioritised['items']:
                 fileinfo = files[sha]
                 if fileinfo != representative and fileinfo['given_label'] is None:
                     fileinfo['given_label'] = label
-                    num_files_to_label -= 1
-                    if fileinfo['given_label'] == fileinfo['family']:
-                        correctly_labelled += 1
-                    else:
-                        mislabelled += 1
+                    if fileinfo['incoming']:
+                        num_files_to_label -= 1
+                        if fileinfo['given_label'] == fileinfo['family']:
+                            correctly_labelled += 1
+                        else:
+                            mislabelled += 1
 
         if not cluster_list:
             still_more = False
