@@ -157,7 +157,12 @@ def label_cluster_and_files(label, cluster, files, clusters):
                 i += i2
     return l, c, i
 
-if __name__ == '__main__' and load_from_pickles('pickles/validated/', True):
+if __name__ == '__main__':
+    successfully_loaded = load_from_pickles('pickles/validated/', True)
+    if not successfully_loaded:
+        print("Run training (-T or -E and -C) and validation (-V) first")       
+        raise SystemExit
+    
     num_files_to_label = total_files_to_label(files)
     files_analysed_in_depth = 0
 
