@@ -3,7 +3,7 @@
 
 import os
 import pickle
-from multiprocessing import Pool
+from multiprocessing import Process, Manager
 
 files = {}
 clusters = {
@@ -69,24 +69,28 @@ def total_files_to_label(files):
             total += 1
     return total
 
-def is_good_quality(cluster):
+def evaluate_quality(cluster, cluster_list):
+    """
+    TODO: Dokumenter
+    """
+    incoming, unlabelled, packed = labelling_stats(cluster)
+    labelled = incoming - unlabelled
     
-            # TODO: Evaluate cluster quality
-
-            incoming, unlabelled, packed = labelling_stats(cluster)
-            labelled = incoming - unlabelled
-            
-            if (incoming == 0
-                    or cluster['label'] is not None 
-                    or unlabelled < labelled):
-                return False, incoming, packed, unlabelled, labelled
-            #elif cluster['packed_incoming'] == cluster['total_incoming']:
-            # If the above statement is not true, but the number of packed
-            # files is equal to the size of the cluster, the cluster
-            # is likely of poor quality.
-            #    continue
-            else:
-                return True, incoming, packed, unlabelled, labelled
+    if (incoming == 0
+            or cluster['label'] is not None 
+            or unlabelled < labelled):
+        return
+    #elif cluster['packed_incoming'] == cluster['total_incoming']:
+    # If the above statement is not true, but the number of packed
+    # files is equal to the size of the cluster, the cluster
+    # is likely of poor quality.
+    #    continue
+    else:
+        cluster['total_incoming'] = incoming
+        cluster['packed_incoming'] = packed
+        cluster['unlabelled_files'] = unlabelled
+        cluster['labelled_files'] = labelled
+        cluster_list.append(cluster)
 
 def get_unlabelled(cluster):
     return cluster['unlabelled_files']
@@ -112,20 +116,13 @@ if __name__ == '__main__' and load_from_pickles('pickles/validated/', True):
 
     while still_more:
         cluster_list = []
-        
+
         for cluster_type in clusters.values():
             for cluster in cluster_type.values():
-                good_quality, incoming, packed, unlabelled, labelled = is_good_quality(cluster)
-                if good_quality:
-                    cluster['total_incoming'] = incoming
-                    cluster['packed_incoming'] = packed
-                    cluster['unlabelled_files'] = unlabelled
-                    cluster['labelled_files'] = labelled
-                    cluster_list.append(cluster)
+                evaluate_quality(cluster, cluster_list)
         
         cluster_list.sort(key=get_unlabelled)
 
-        
         if cluster_list:
             prioritised = cluster_list.pop()
         else:
