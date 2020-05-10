@@ -45,20 +45,6 @@ def load_from_pickles(folder, load_clusters=False):
             clusters = pickle.load(picklefile)
     return True
 
-def labelling_stats(cluster):
-    total = 0
-    unlabelled = 0
-    num_packed = 0
-
-    for sha in cluster['items']:
-        if files[sha]['incoming']:
-            total += 1
-            if files[sha]['given_label'] is None:
-                unlabelled += 1
-            if files[sha]['obfuscation'] is not None:
-                num_packed += 1
-    return total, unlabelled, num_packed
-
 def total_files_to_label(files):
     """
     TODO: Dokumenter
@@ -69,30 +55,46 @@ def total_files_to_label(files):
             total += 1
     return total
 
-def evaluate_quality(cluster, cluster_list):
+def fill_cluster_details(cluster, files):
     """
     TODO: Dokumenter
     """
-    incoming, unlabelled, packed = labelling_stats(cluster)
+    incoming = 0
+    unlabelled = 0
+    packed = 0
+
+    for sha in cluster['items']:
+        if files[sha]['incoming']:
+            incoming += 1
+            if files[sha]['given_label'] is None:
+                unlabelled += 1
+            if files[sha]['obfuscation'] is not None:
+                packed += 1
+
     labelled = incoming - unlabelled
+
+    cluster['total_incoming'] = incoming
+    cluster['packed_incoming'] = packed
+    cluster['unlabelled_files'] = unlabelled
+    cluster['labelled_files'] = labelled
+
+def is_good_quality(cluster):
+    """
+    TODO: Dokumenter
+    """
     
-    if (incoming == 0
-            or cluster['label'] is not None 
-            or unlabelled < labelled):
-        return
-    #elif cluster['packed_incoming'] == cluster['total_incoming']:
-    # If the above statement is not true, but the number of packed
-    # files is equal to the size of the cluster, the cluster
-    # is likely of poor quality.
-    #    continue
+    if (cluster['total_incoming'] != 0
+            and cluster['label'] is None 
+            and cluster['unlabelled_files'] > cluster['labelled_files']):
+        return True
     else:
-        cluster['total_incoming'] = incoming
-        cluster['packed_incoming'] = packed
-        cluster['unlabelled_files'] = unlabelled
-        cluster['labelled_files'] = labelled
-        cluster_list.append(cluster)
+        return False
+        
 
 def get_unlabelled(cluster):
+    """
+    TODO: Dokumenter
+    """
     return cluster['unlabelled_files']
 
 def get_label_from_in_depth_analysis(fileinfo):
@@ -109,20 +111,20 @@ def label_clusters_of_file(fileinfo, files, clusters):
 
     if fileinfo['imphash'] is not None:
         cluster = clusters['imphash_clusters'][fileinfo['imphash']]
-        if cluster['label'] is None:
+        if is_good_quality(cluster):
             results.append(label_cluster_and_files(fileinfo['given_label'], cluster, files, clusters))
 
     if fileinfo['icon_hash'] is not None:
         cluster = clusters['icon_clusters'][fileinfo['icon_hash']]
-        if cluster['label'] is None:
+        if is_good_quality(cluster):
             results.append(label_cluster_and_files(fileinfo['given_label'], cluster, files, clusters))
     for sha in fileinfo['contained_resources']:
         cluster = clusters['resource_clusters'][sha]
-        if cluster['label'] is None:
+        if is_good_quality(cluster):
             results.append(label_cluster_and_files(fileinfo['given_label'], cluster, files, clusters))
     if fileinfo['tlsh_cluster'] is not None:
         cluster = clusters['tlsh_clusters'][fileinfo['tlsh_cluster']]
-        if cluster['label'] is None:
+        if is_good_quality(cluster):
             results.append(label_cluster_and_files(fileinfo['given_label'], cluster, files, clusters))
 
     for l, c, i in results:
@@ -173,7 +175,9 @@ if __name__ == '__main__' and load_from_pickles('pickles/validated/', True):
 
         for cluster_type in clusters.values():
             for cluster in cluster_type.values():
-                evaluate_quality(cluster, cluster_list)
+                fill_cluster_details(cluster, files)
+                if is_good_quality(cluster):
+                    cluster_list.append(cluster)
         
         cluster_list.sort(key=get_unlabelled)
 
