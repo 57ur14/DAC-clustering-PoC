@@ -247,7 +247,10 @@ def update_tlsh_centroid(centroid, tlsh_clusters, files):
                     # Summarise distance to all other items in cluster
                     distance_sum = tlsh.diff(fileinfo['tlsh'], otherfile['tlsh'])
             # Calculate closeness centrality (higher closeness is better)
-            centrality = 1 / distance_sum
+            if distance_sum == 0:
+                centrality = 1
+            else:
+                centrality = 1 / distance_sum
             if centrality > minimum_centrality:
                 minimum_centrality = centrality
                 new_centroid = fileinfo['tlsh']
