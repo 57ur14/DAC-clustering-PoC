@@ -110,11 +110,11 @@ if __name__ == '__main__' and load_from_pickles('pickles/validated/', True):
                     # than unlabelled files, cluster is likely of poor quality, 
                     # or all fles are labelled.
                     continue
-                elif cluster['packed_incoming'] == cluster['total_incoming']:
-                    # If the above statement is not true, but the number of packed
-                    # files is equal to the size of the cluster, the cluster
-                    # is likely of poor quality.
-                    continue
+                #elif cluster['packed_incoming'] == cluster['total_incoming']:
+                # If the above statement is not true, but the number of packed
+                # files is equal to the size of the cluster, the cluster
+                # is likely of poor quality.
+                #    continue
                 else:
                     # If the cluster does not seem to be of poor quality,
                     # add to cluster where representative files are analysed.
