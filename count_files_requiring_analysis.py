@@ -101,6 +101,60 @@ def get_label_from_in_depth_analysis(fileinfo):
     """
     return fileinfo['family']
 
+def label_clusters_of_file(fileinfo, files, clusters):
+    labelled = 0
+    correctly = 0
+    incorrectly = 0
+    results = []
+
+    if fileinfo['imphash'] is not None:
+        cluster = clusters['imphash_clusters'][fileinfo['imphash']]
+        if cluster['label'] is None:
+            results.append(label_cluster_and_files(fileinfo['given_label'], cluster, files, clusters))
+
+    if fileinfo['icon_hash'] is not None:
+        cluster = clusters['icon_clusters'][fileinfo['icon_hash']]
+        if cluster['label'] is None:
+            results.append(label_cluster_and_files(fileinfo['given_label'], cluster, files, clusters))
+    for sha in fileinfo['contained_resources']:
+        cluster = clusters['resource_clusters'][sha]
+        if cluster['label'] is None:
+            results.append(label_cluster_and_files(fileinfo['given_label'], cluster, files, clusters))
+    if fileinfo['tlsh_cluster'] is not None:
+        cluster = clusters['tlsh_clusters'][fileinfo['tlsh_cluster']]
+        if cluster['label'] is None:
+            results.append(label_cluster_and_files(fileinfo['given_label'], cluster, files, clusters))
+
+    for l, c, i in results:
+        labelled += l
+        correctly += c
+        incorrectly += i
+    
+    return labelled, correctly, incorrectly
+
+def label_cluster_and_files(label, cluster, files, clusters):
+    l = 0
+    c = 0
+    i = 0
+    
+    cluster['label'] = label
+    for sha in cluster['items']:
+        fileinfo = files[sha]
+        if fileinfo['given_label'] is None:
+            fileinfo['given_label'] = label
+            if fileinfo['incoming']:
+                if fileinfo['given_label'] == fileinfo['family']:
+                    c += 1
+                else:
+                    i += 1
+                l += 1
+                
+                l2, c2, i2 = label_clusters_of_file(fileinfo, files, clusters)
+                l += l2
+                c += c2
+                i += i2
+    return l, c, i
+
 if __name__ == '__main__' and load_from_pickles('pickles/validated/', True):
     num_files_to_label = total_files_to_label(files)
     files_analysed_in_depth = 0
@@ -126,7 +180,7 @@ if __name__ == '__main__' and load_from_pickles('pickles/validated/', True):
         if cluster_list:
             prioritised = cluster_list.pop()
         else:
-            prioritised = None
+            break
 
         representative = None
         for sha in prioritised['items']:
@@ -147,20 +201,14 @@ if __name__ == '__main__' and load_from_pickles('pickles/validated/', True):
             label = get_label_from_in_depth_analysis(representative)
             representative['given_label'] = label
             files_analysed_in_depth += 1
-            
             num_files_to_label -= 1
-            prioritised['label'] = label
-            for sha in prioritised['items']:
-                fileinfo = files[sha]
-                if fileinfo != representative and fileinfo['given_label'] is None:
-                    fileinfo['given_label'] = label
-                    if fileinfo['incoming']:
-                        num_files_to_label -= 1
-                        if fileinfo['given_label'] == fileinfo['family']:
-                            correctly_labelled += 1
-                        else:
-                            mislabelled += 1
-
+            
+            labelled, correctly, incorrectly = label_clusters_of_file(representative, files, clusters)
+            
+            num_files_to_label -= labelled
+            correctly_labelled += correctly
+            mislabelled += incorrectly
+            
         if not cluster_list:
             still_more = False
 
