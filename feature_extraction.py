@@ -35,7 +35,7 @@ ATTEMPT_UNPACK_ALL_FILES = config.getboolean('feature_extraction', 'attempt_unpa
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
 CLUSTER_WITH_IMPHASH = config.getboolean('clustering', 'cluster_with_imphash')
 CLUSTER_WITH_RESOURCES = config.getboolean('clustering', 'cluster_with_resources')
-CLUSTER_WITH_CONTAINED_PE = config.getboolean('clustering', 'cluster_with_contained_pe')
+LABEL_ON_CONTAINED_PE = config.getboolean('clustering', 'label_on_contained_pe')
 CLUSTER_WITH_ICON = config.getboolean('clustering', 'cluster_with_icon')
 CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 CLUSTER_WITH_VHASH = config.getboolean('clustering', 'cluster_with_vhash')
@@ -148,7 +148,7 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
             unpacked = unpacking.unpack_file(fullfilepath, tmpdir)
             for unpacked_file in unpacked:              # For all unpacked files
                     if (filetype.guess_mime(unpacked_file) == 'application/x-msdownload'
-                            and (EXTRACT_ALL_FEATURES or CLUSTER_WITH_CONTAINED_PE)):
+                            and (EXTRACT_ALL_FEATURES or LABEL_ON_CONTAINED_PE)):
                         # Check if the file is an "exe" (pe file) and analyse it if so
                         analysis_result = analyse_file(unpacked_file, unpacks_from=set([fileinfo['sha256']]), unpacking_set=unpacking_set, family=family)
                         if analysis_result is not None:
