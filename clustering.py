@@ -183,6 +183,11 @@ def cluster_using_tlsh(fileinfo, files, tlsh_clusters):
     best_score = TLSH_THRESHOLD + 1
     best_cluster = None
 
+    if fileinfo['tlsh_cluster'] is not None:
+        # During training, the file might already be
+        # in a cluster. Return if cluster has a label.
+        return tlsh_clusters[fileinfo['tlsh_cluster']]['label'] is not None
+
     for centroid in tlsh_clusters.keys():
         score = tlsh.diff(fileinfo['tlsh'], centroid)
         if score < best_score:
@@ -550,11 +555,11 @@ def analyse_clusters_on_feature(files, feature_clusters):
     number_of_clusters = 0
     total_incoming_files_in_clusters = 0
     
-    for key in feature_clusters.keys():
-        for sha in feature_clusters[key]['items']:
+    for feature_cluster in feature_clusters.values():
+        for sha in feature_cluster['items']:
             if files[sha]['incoming']:
                 total_incoming_files_in_clusters += 1
-        cluster_purity, cluster_size, _, _ = analyse_file_cluster(feature_clusters[key]['items'], files, True)
+        cluster_purity, cluster_size, _, _ = analyse_file_cluster(feature_cluster['items'], files, True)
         if cluster_size:
             mean_purity += cluster_purity
             mean_size += cluster_size
