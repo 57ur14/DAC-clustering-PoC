@@ -12,6 +12,8 @@ do
     { time ./run.py -C; } &>> "$outfile"
     echo "Validation:" >> "$outfile"
     { time ./run.py -V "local/$dataset-k-fold-splits/test_k-fold_$split.txt"; } &>> "$outfile"
+    echo "Counting files in need of in-depth analysis:" >> "$outfile"
+    { time ./count_files_requiring_analysis.py; } &>> "$outfile"
     mkdir -p "$picklepath"
     cp -r "pickles/extracted/" "$picklepath/extracted/"
     cp -r "pickles/clustered/" "$picklepath/clustered/"
