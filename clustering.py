@@ -556,14 +556,16 @@ def analyse_clusters_on_feature(files, feature_clusters):
     total_incoming_files_in_clusters = 0
     
     for feature_cluster in feature_clusters.values():
+        incoming_files_in_cluster = 0
         for sha in feature_cluster['items']:
             if files[sha]['incoming']:
-                total_incoming_files_in_clusters += 1
+                incoming_files_in_cluster += 1
         cluster_purity, cluster_size, _, _ = analyse_file_cluster(feature_cluster['items'], files, True)
         if cluster_size > 1:
             mean_purity += cluster_purity
             mean_size += cluster_size
             number_of_clusters += 1
+            total_incoming_files_in_clusters += incoming_files_in_cluster
     
     if number_of_clusters:
         mean_purity = mean_purity / number_of_clusters
