@@ -560,7 +560,7 @@ def analyse_clusters_on_feature(files, feature_clusters):
             if files[sha]['incoming']:
                 total_incoming_files_in_clusters += 1
         cluster_purity, cluster_size, _, _ = analyse_file_cluster(feature_cluster['items'], files, True)
-        if cluster_size:
+        if cluster_size > 1:
             mean_purity += cluster_purity
             mean_size += cluster_size
             number_of_clusters += 1
