@@ -85,6 +85,7 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
             'unpacks_from': unpacks_from,
             'contained_pe_files': set(),
             'unpacks_to_nonpacked_pe': False,
+            'unpacks_to_packed_pe': False,
             'contained_pe_fileinfo': {},
             'contained_resources': set(),
             'imphash': None,
@@ -158,6 +159,8 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
                                 # If contained file is not packed or unpacks to a nonpacked file
                                 # Mark this file as "unpacks to nonpacked pe"
                                 fileinfo['unpacks_to_nonpacked_pe'] = True
+                            else:
+                                fileinfo['unpacks_to_packed_pe'] = True
                             fileinfo['contained_pe_files'].add(analysis_result['sha256'])
                             fileinfo['contained_pe_fileinfo'][analysis_result['sha256']] = analysis_result
                     elif EXTRACT_ALL_FEATURES or CLUSTER_WITH_RESOURCES:

@@ -482,7 +482,11 @@ def analyse_clustered_files(files):
     total_pe_files = 0
     incoming_pe_files = 0
     unpacked_pe_files = 0
+    incoming_unpacked_to_anything = 0
     incoming_unpacked_to_nonpacked = 0
+    incoming_unpacked_to_resource = 0
+    incoming_unpacked_to_packed = 0
+    incoming_unpacked_to_pe_and_resource = 0
     obfuscated_pe_files = 0
     obfuscated_incoming_pe = 0
     obfuscated_unpacked_pe = 0
@@ -503,6 +507,18 @@ def analyse_clustered_files(files):
             incoming_pe_files += 1
             if fileinfo['unpacks_to_nonpacked_pe']:
                 incoming_unpacked_to_nonpacked += 1
+            if fileinfo['contained_resources']:
+                incoming_unpacked_to_resource += 1
+            if fileinfo['unpacks_to_packed_pe']:
+                incoming_unpacked_to_packed += 1
+            if (fileinfo['unpacks_to_nonpacked_pe']
+                    or fileinfo['contained_resources']
+                    or fileinfo['unpacks_to_packed_pe']):
+                incoming_unpacked_to_anything += 1
+            if ((fileinfo['unpacks_to_nonpacked_pe'] 
+                    or fileinfo['unpacks_to_packed_pe'])
+                    and fileinfo['contained_resources']):
+                incoming_unpacked_to_pe_and_resource += 1
             if fileinfo['obfuscation'] is not None:
                 obfuscated_pe_files += 1
                 obfuscated_incoming_pe += 1
@@ -518,16 +534,19 @@ def analyse_clustered_files(files):
     
     return {
         'total_pe_files': total_pe_files,
-        'incoming_pe_files': incoming_pe_files,
-        'unpacked_pe_files': unpacked_pe_files,
-        'incoming_unpacked_to_nonpacked': incoming_unpacked_to_nonpacked,
-        'obfuscated_pe_files': obfuscated_pe_files,
-        'obfuscated_incoming_pe': obfuscated_incoming_pe,
-        'obfuscated_unpacked_pe': obfuscated_unpacked_pe,
-        'fast_clustered_files': fast_clustered_files,
-        'fast_clustered_incoming': fast_clustered_incoming,
-        'slow_clustered_files': slow_clustered_files,
-        'slow_clustered_incoming': slow_clustered_incoming
+        'total_incoming_pe_files': incoming_pe_files,
+        'total_unpacked_pe_files': unpacked_pe_files,
+        'total_incoming_unpacked_to_anything': incoming_unpacked_to_anything,
+        'total_incoming_unpacked_to_nonpacked': incoming_unpacked_to_nonpacked,
+        'total_incoming_unpacked_to_resource': incoming_unpacked_to_resource,
+        'total_incoming_unpacked_to_both_pe_and_resource': incoming_unpacked_to_pe_and_resource,
+        'total_obfuscated_pe_files': obfuscated_pe_files,
+        'total_obfuscated_incoming_pe': obfuscated_incoming_pe,
+        'total_obfuscated_unpacked_pe': obfuscated_unpacked_pe,
+        'total_fast_clustered_files': fast_clustered_files,
+        'total_fast_clustered_incoming': fast_clustered_incoming,
+        'total_slow_clustered_files': slow_clustered_files,
+        'total_slow_clustered_incoming': slow_clustered_incoming
     }
 
 def analyse_clusters(files, clusters):
