@@ -29,6 +29,7 @@ TLSH_FAST_CLUSTERING = config.getboolean('clustering', 'tlsh_fast_clustering')
 CLUSTER_PACKED_FILES = config.getboolean('clustering', 'cluster_with_packed_files')
 LABEL_ON_CONTAINED_PE = config.getboolean('clustering', 'label_on_contained_pe')
 CLUSTER_WITH_VHASH = config.getboolean('clustering', 'cluster_with_vhash')
+CLUSTER_USING_ALL_FEATURES = config.getboolean('clustering', 'cluster_using_all_features')
 UPDATE_CLUSTER_LABELS_DURING_VALIDATION = config.getboolean('clustering', 'update_cluster_labels_during_validation')
 
 def cluster_files(files, clusters):
@@ -42,6 +43,9 @@ def cluster_files(files, clusters):
 
         if fast_cluster_file(fileinfo, clusters):
             fileinfo['fast_clustered'] = True
+            if CLUSTER_USING_ALL_FEATURES:
+                slow_cluster_file(fileinfo, files, clusters)
+                fileinfo['slow_clustered'] = True
         else:
             # If file was not fast clustered, cluster using slow features
             slow_cluster_file(fileinfo, files, clusters)
