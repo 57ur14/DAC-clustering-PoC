@@ -41,10 +41,8 @@ CLUSTER_WITH_TLSH = config.getboolean('clustering', 'cluster_with_tlsh')
 CLUSTER_WITH_VHASH = config.getboolean('clustering', 'cluster_with_vhash')
 
 if CLUSTER_WITH_VHASH:
-    # Load sha2vhash dict from pickle if CLUSTER_WITH_VHASH is True
-    import pickle
-    with open('pickles/sha2vhash.pkl', 'rb') as picklefile:
-        SHA2VHASH = pickle.load(picklefile)
+    # Load sha2vhash CLUSTER_WITH_VHASH is True
+    import sha2vhash
 
 def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming=False, family=None, training=False):
     """
@@ -108,7 +106,7 @@ def analyse_file(fullfilepath, unpacks_from=set(), unpacking_set=set(), incoming
             return None
         
         if CLUSTER_WITH_VHASH:
-            fileinfo['vhash'] = SHA2VHASH.get(fileinfo['sha256'], None)
+            fileinfo['vhash'] = sha2vhash.get_vhash(fileinfo['sha256'])
         
         # Add to unpacking chain to allow loop detection
         unpacking_set.add(fileinfo['sha256'])
