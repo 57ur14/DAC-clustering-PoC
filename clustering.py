@@ -41,7 +41,7 @@ def cluster_files(files, clusters):
         # Iterate over all files and cluster files
         fileinfo = files[sha256]
 
-        if fast_cluster_file(fileinfo, clusters):
+        if fast_cluster_file(fileinfo, clusters, files, True, True):
             fileinfo['fast_clustered'] = True
             if CLUSTER_USING_ALL_FEATURES:
                 slow_cluster_file(fileinfo, files, clusters)
@@ -62,8 +62,11 @@ def cluster_file(fileinfo, files, clusters):
 
     Used during validation when files are clustered in real-time.
     """
-    if fast_cluster_file(fileinfo, clusters, True):
+    if fast_cluster_file(fileinfo, clusters, files, only_successful_if_labelled_cluster=True):
         fileinfo['fast_clustered'] = True
+        if CLUSTER_USING_ALL_FEATURES:
+            slow_cluster_file(fileinfo, files, clusters)
+            fileinfo['slow_clustered'] = True
         return True
     else:
         # If file was not fast clustered, cluster using slow features
@@ -72,7 +75,7 @@ def cluster_file(fileinfo, files, clusters):
         return False
 
 
-def fast_cluster_file(fileinfo, clusters, only_successful_if_labelled_cluster=False):
+def fast_cluster_file(fileinfo, clusters, files, only_successful_if_labelled_cluster=True, training=False):
     """
     Attempt to cluster a file using features that allow fast
     clustering, such as imphash, contained resources and icon hash
@@ -82,26 +85,31 @@ def fast_cluster_file(fileinfo, clusters, only_successful_if_labelled_cluster=Fa
     If only_successful_if_labelled_cluster is set to true,
     this function will only return True if the file could be clustered
     with fast features and the file was added to an existing cluster
-    that has a label. This value should be set to True during validation.
+    that has a label. During training, "training" should also be set to true.
+
+    If only_successful_if_labelled_cluster and training is set to true, 
+    this function will only return True if the file could be clustered 
+    with fast features and the file was added to a cluster containing at 
+    least one incoming file. This value should be set to True during training.
     """
     successfully_clustered = False
 
     if CLUSTER_WITH_VHASH and fileinfo['vhash']:
         # Cluster with vhash if supposed to an file has a vhash
-        if (cluster_using_equal_values('vhash', fileinfo, clusters['vhash_clusters'])
+        if (cluster_using_equal_values('vhash', fileinfo, clusters['vhash_clusters'], files, training)
                 or not only_successful_if_labelled_cluster):
             successfully_clustered = True
 
 
     if CLUSTER_WITH_RESOURCES and fileinfo['contained_resources']:
         # Cluster with resources if file contained resources
-        if (cluster_on_contained_resources(fileinfo, clusters['resource_clusters'])
+        if (cluster_on_contained_resources(fileinfo, clusters['resource_clusters'], files, training)
                 or not only_successful_if_labelled_cluster):
             successfully_clustered = True
 
     if CLUSTER_WITH_ICON and fileinfo['icon_hash']:
         # Cluster using a hash of the icon
-        if (cluster_using_equal_values('icon_hash', fileinfo, clusters['icon_clusters'])
+        if (cluster_using_equal_values('icon_hash', fileinfo, clusters['icon_clusters'], files, training)
                 or not only_successful_if_labelled_cluster):
             successfully_clustered = True
 
@@ -111,7 +119,7 @@ def fast_cluster_file(fileinfo, clusters, only_successful_if_labelled_cluster=Fa
 
         if CLUSTER_WITH_IMPHASH and fileinfo['imphash']:
             # Cluster with imphash
-            if (cluster_using_equal_values('imphash', fileinfo, clusters['imphash_clusters'])
+            if (cluster_using_equal_values('imphash', fileinfo, clusters['imphash_clusters'], files, training)
                     or not only_successful_if_labelled_cluster):
                 successfully_clustered = True
     return successfully_clustered
@@ -121,19 +129,23 @@ def slow_cluster_file(fileinfo, files, clusters):
     if CLUSTER_WITH_TLSH and fileinfo['tlsh']:
         cluster_using_tlsh(fileinfo, files, clusters['tlsh_clusters'])
 
-def cluster_on_contained_resources(fileinfo, resource_clusters):
+def cluster_on_contained_resources(fileinfo, resource_clusters, files, training=False):
     """
     Attempt to cluster a file based on resources that
     have been unpacked from the file.
-    Returns True if file was added to an existing cluster
-    with a label and false if not.
+    If training is set to false, this function returns True if the file 
+    was added to an existing cluster with a label and False if not.
+    If training is set to true, this function returns True if the file
+    was added to an existing cluster with at least one incoming file in it.
     """
     successfully_clustered = False
     for resource_hash in fileinfo['contained_resources']:
         if resource_hash in resource_clusters.keys():
             # Add file to cluster if resource hash cluster is present
             resource_clusters[resource_hash]['items'].add(fileinfo['sha256'])
-            if resource_clusters[resource_hash]['label'] is not None:
+            if training and at_least_two_incoming(resource_clusters[resource_hash]['items'], files):
+                successfully_clustered = True
+            elif resource_clusters[resource_hash]['label'] is not None:
                 successfully_clustered = True
         else:
             # Add new resource cluster if resource hash not present
@@ -146,22 +158,26 @@ def cluster_on_contained_resources(fileinfo, resource_clusters):
             resource_clusters[resource_hash]['items'].add(fileinfo['sha256'])
     return successfully_clustered
 
-def cluster_using_equal_values(key, fileinfo, cluster):
+def cluster_using_equal_values(key, fileinfo, cluster, files, training=False):
     """
     Cluster a file by checking for equal values in a hash table.
     If value was found in hash table, add to the cluster identified
     by the value.
     If no cluster was found for the provided value, create a new
     cluster identified by the value.
-    Returns True if the file was added to an existing cluster
-    with a label and False if not.
+    If training is set to false, this function returns True if the file 
+    was added to an existing cluster with a label and False if not.
+    If training is set to true, this function returns True if the file
+    was added to an existing cluster with at least one incoming file in it.
     """
     if fileinfo[key] in cluster.keys():
         # If the value is present in the cluster keys,
         # add this file to the cluster
         cluster[fileinfo[key]]['items'].add(fileinfo['sha256'])
-        if cluster[fileinfo[key]]['label'] is not None:
-            return True
+        if training:
+            return at_least_two_incoming(cluster[fileinfo[key]]['items'], files)
+        else:
+            return cluster[fileinfo[key]]['label'] is not None
     else:
         # If value is not present in the cluster keys,
         # create new cluster and add this file to the new cluster
@@ -177,8 +193,8 @@ def cluster_using_tlsh(fileinfo, files, tlsh_clusters):
     """
     Cluster a file using tlsh.
     If no cluster matched, create a new cluster.
-    Returns True if this file was added to an existing cluster
-    with a label and False if not.
+    Returns True if the file  was added to an existing cluster with 
+    a label and False if not.
     """
     best_score = TLSH_THRESHOLD + 1
     best_cluster = None
@@ -273,6 +289,18 @@ def update_tlsh_centroid(centroid, tlsh_clusters, files):
             tlsh_clusters[new_centroid] = tlsh_clusters[centroid]
             tlsh_clusters.pop(centroid)
 
+def at_least_two_incoming(sha256digests, files):
+    """
+    Returns True if at least two files in the given set of sha256
+    digests are marked as incoming. Returns False if not.
+    """
+    num_incoming = 0
+    for sha in sha256digests:
+        if files[sha]['incoming']:
+            num_incoming += 1
+            if num_incoming == 2:
+                return True
+    return False
 
 def label_clusters(files, clusters):
     """
