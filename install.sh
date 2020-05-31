@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install dependencies and download D&C-Clustering-poc to $HOME
+# Install dependencies and download DAC-clustering-PoC to $HOME
 
 sudo apt-get update
 sudo apt-get install -y gcc cmake python3 python3-pip python-dev unzip clamav libclamunrar9
@@ -39,8 +39,8 @@ sudo rm /var/lib/clamav/*
 sudo echo -e "rule pass\n{\n\tcondition:\n\t\tfalse\n}" | sudo tee /var/lib/clamav/pass.yar
 
 cd $HOME
-git clone git@github.com:57ur14/divide-and-conquer-poc.git
-cd divide-and-conquer-poc
+git clone https://github.com/57ur14/DAC-clustering-PoC.git
+cd DAC-clustering-PoC
 cp example-config.ini config.ini
 # Generate a random 32-character key
 key=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 32)
