@@ -196,7 +196,6 @@ def get_icon_hash(pefile_pe):
     """
     Retrieve a hash of the icon a Windows system would prefer to use.
     Returns None if no RT_GROUP_ICON was found or the icon could not be extracted properly.
-    Uses xxhash to retrieve a hash that is fast to calculate and with good uniqueness.
     """
     extract = extract_icon.ExtractIcon(pefile_pe=pefile_pe)
     raw = extract.get_raw_windows_preferred_icon()

@@ -56,7 +56,7 @@ def get_diec_output(filepath):
     try:
         diec_process = subprocess.run(["diec", filepath], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as err:
-        print(err) # TODO: Handle error
+        print(err)
     except OSError as err:
         # Potentially out of memory or encountered other error.
         # Print error message and retry later.
