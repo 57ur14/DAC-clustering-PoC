@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+count_files_requiring_analysis - a script for counting the number of files 
+    that would need in-depth analysis if representative files are analysed.
+
+Part of D&C-Clustering-POC
+
+Copyright (c) 2020 Sturla Høgdahl Bae
+"""
 
 import os
 import pickle
@@ -47,7 +55,8 @@ def load_from_pickles(folder, load_clusters=False):
 
 def total_files_to_label(files):
     """
-    TODO: Dokumenter
+    Identify the number of files that do not have a label. 
+    Returns the number of unlabelled, incoming files.
     """
     total = 0
     for fileinfo in files.values():
@@ -57,7 +66,9 @@ def total_files_to_label(files):
 
 def fill_cluster_details(cluster, files):
     """
-    TODO: Dokumenter
+    Count the number of incoming files, packed incoming files,
+    unlabelled incoming and labelled incoming files.
+    Add these properties to the cluster.
     """
     incoming = 0
     unlabelled = 0
@@ -80,7 +91,9 @@ def fill_cluster_details(cluster, files):
 
 def is_good_quality(cluster):
     """
-    TODO: Dokumenter
+    Evaluate the quality of a cluster.
+    Returns True of the quality is evaluated to be good,
+    and False if the quality is evaluated to be poor.
     """
     
     if (cluster['total_incoming'] != 0
@@ -93,17 +106,24 @@ def is_good_quality(cluster):
 
 def get_unlabelled(cluster):
     """
-    TODO: Dokumenter
+    Return the value contained in the key "unlabelled_files"
     """
     return cluster['unlabelled_files']
 
 def get_label_from_in_depth_analysis(fileinfo):
     """
-    TODO: Dokumenter
+    Simulated in-depth analysis.
+    Returns the real label of the file.
     """
     return fileinfo['family']
 
 def label_clusters_of_file(fileinfo, files, clusters):
+    """
+    Iterate over all clusters a file is part of, and which
+    do not have a label. If a cluster is of good quality,
+    use the label of the given file to label the cluster
+    and the files contained in the file.
+    """
     labelled = 0
     correctly = 0
     incorrectly = 0
@@ -135,6 +155,12 @@ def label_clusters_of_file(fileinfo, files, clusters):
     return labelled, correctly, incorrectly
 
 def label_cluster_and_files(label, cluster, files, clusters):
+    """
+    Use the provided label to label a given cluster.
+    Then iterate over files in the cluster. If a file
+    does not have a label, label the file and propagate
+    labelling to the clusters of that file.
+    """
     l = 0
     c = 0
     i = 0
