@@ -18,17 +18,22 @@ metadata_path = config.get('feature_extraction', 'vt_metadata_path')
 
 def get_vhash(sha256):
     """
-    TODO: Dokumenter og kommenter kode
+    Retrieve the vhash of a file
     """
+    # Assume that the metadata file is named <sha256digest>.json,
+    # located in the folder specified in the configuration.
     filepath = os.path.join(metadata_path, sha256 + '.json')
     if os.path.exists(filepath):
+        # If the file exists
         with open(filepath) as infile:
             try:
+                # Parse the json file
                 parsed = json.load(infile)
             except json.JSONDecodeError as e:
                 print(e)
                 return None
             else:
+                # Return the vhash of the file
                 return parsed.get('vhash')
     # Return None if vhash could not be retrieved
     return None
