@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-clustering - a module for extracting features from PE executables
+feature_extraction - a module for extracting features from PE executables
 
 Part of D&C-Clustering-POC
 
