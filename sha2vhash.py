@@ -12,13 +12,9 @@ import os
 import json
 import configparser
 
-"""
 config = configparser.ConfigParser()
 config.read('config.ini')
 metadata_path = config.get('feature_extraction', 'vt_metadata_path')
-"""
-# TODO: replace later
-metadata_path = '/clusters/metadata/'
 
 def get_vhash(sha256):
     """
@@ -29,7 +25,7 @@ def get_vhash(sha256):
         with open(filepath) as infile:
             try:
                 parsed = json.load(infile)
-            except JSONDecodeError as e:
+            except json.JSONDecodeError as e:
                 print(e)
                 return None
             else:
