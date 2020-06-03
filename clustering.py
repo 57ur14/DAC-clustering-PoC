@@ -322,10 +322,10 @@ def is_good_cluster(purity, size):
     If cluster is sufficiently pure or there are few 
     files in the cluster (but the purity is at least 51%),
     return True. If not, return False.
+    The thresholds used are likely not optimal.
     """
 
     # Set values for labelling purity
-    # TODO: Experiment with different values for minimum purity
     LABEL_MINIMUM_PURITY = 0.8
     if LABEL_MINIMUM_PURITY == 1:
         LABEL_MINIMUM_REQUIRED_FILES = 1
@@ -489,9 +489,6 @@ def label_file_on_contained_pe(fileinfo, files):
             label = files[sha]['given_label']
             if label is not None:
                 if label in labels.keys():
-                    # TODO: Are all contained files
-                    # equally trustworthy?
-                    # Include a quality measure on files?
                     labels[label] += 1
                 else:
                     labels[label] = 1
