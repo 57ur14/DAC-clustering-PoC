@@ -62,15 +62,14 @@ def analyse_file(fullfilepath, family=None, incoming=False, unpacks_from=set(), 
         try:
             pe = pefile.PE(data=rawfile)
         except Exception:
-            # TODO: Find alternative solution
-            #non_parsable_files[fileinfo['sha256']] = fileinfo   # If the file cannot be parsed by pefile, 
-            return None                                         # add to list of files that cannot be parsed
+            # If file cannot be parsed with pefile, 
+            # Return None
+            return None
 
         pe.parse_data_directories()
         fileinfo['pefile_warnings'] = pe.get_warnings()
         if len(fileinfo['pefile_warnings']) != 0:
             # Simple method of identifying if file seems suspicious
-            # TODO: Investigate peutils -> is_suspicious(pe) (function in peutils.py)
             fileinfo['suspicious'] = True
 
         fileinfo['obfuscation'] = unpacking.detect_obfuscation_by_diec(fullfilepath)
@@ -115,7 +114,6 @@ def analyse_file(fullfilepath, family=None, incoming=False, unpacks_from=set(), 
                     if analysis_result is not None:
                         total_unpacked_pe += 1
                         # If file could be parsed by pefile
-                        # TODO: Could just change contained_pe_files to a dict and use .keys()
                         if (analysis_result['obfuscation']['type'] == 'none'
                                 or analysis_result['unpacks_to_nonpacked_pe']):
                             # If contained file is not packed or unpacks to a nonpacked file
