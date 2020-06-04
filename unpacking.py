@@ -7,7 +7,6 @@ Part of D&C-Clustering-POC
 Copyright (c) 2020 Sturla Høgdahl Bae
 
 External dependencies:
-* pefile:           pip3 install pefile
 * diec:             Manual installation: https://github.com/horsicq/Detect-It-Easy
 * clamav:           apt-get install clamav
 * libclamunrar9:    apt-get install libclamunrar9
@@ -20,8 +19,6 @@ import shutil
 import subprocess
 import sys
 import time
-
-import peutils
 
 config = configparser.ConfigParser()
 config.read('config.ini')
