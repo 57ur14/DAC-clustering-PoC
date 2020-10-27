@@ -3,11 +3,11 @@
 Proof of concept for performing triage of PE-files with Divide-and-Conquer clustering. Allows comparisons between different clustering methods.
 
 ## Installing ##
-The PoC has been testder under Ubuntu 18.04. The following steps describe how to install dependencies and the PoC.
+The PoC has been testder under Ubuntu 18.04. The following steps describe how to install dependencies and the PoC. Unless a separate VM is being used for this project, it might be a good idea to use virtualenv.
 
 ```sh
 sudo apt-get install -y gcc cmake python3 python3-pip python-dev unzip clamav libclamunrar9
-sudo pip3 install filetype pillow pefile
+pip3 install filetype pillow pefile --user
 
 # Install DetectItEasy to $HOME/.bin/die_lin64_portable/
 mkdir -p $HOME/.bin/
@@ -30,7 +30,7 @@ python3 $HOME/.bin/tlsh-master/py_ext/setup.py install --user
 git clone https://github.com/ntnu-rgb/pefile-extract-icon.git
 python3 ./pefile-extract-icon/setup.py install --user
 
-# Disable ClamAV service, delete signature database and create an empty one
+# Disable the ClamAV service, delete signature database and create an empty one
 sudo service clamav-freshclam stop
 sudo systemctl disable clamav-freshclam
 sudo rm /var/lib/clamav/*
