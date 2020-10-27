@@ -65,9 +65,9 @@ time ./run.py -V /path/to/list/of/files_with_family.txt
 ```
 
 ## Contributing ##
-This project was merely intended as a PoC, and will therefore unfortunately not be further developed. Anyone is however free to fork the project and develop it further, or otherwise make use of the code under the terms stated in the lisence.
+This project was merely intended as a PoC, and will therefore unfortunately not be further developed. Anyone is however free to fork the project and develop it further, or otherwise make use of the code under the terms stated in the license.
 
-## Lisence ##
-The code in this repository is lisenced under the [MIT Lisence](LICENSE.txt).
+## License ##
+The code in this repository is licensed under the [MIT License](LICENSE.txt).
 
-Dependencies are used in a manner that does not affect the lisencing of the implemented PoC. ClamAV is for instance lisenced under the restrictive GNU GPL v2 license, but since it is used as a [separate program](https://www.gnu.org/licenses/gpl-faq.html#MereAggregation), the restrictive lisencing does not affect the lisencing of this PoC.
+Dependencies are used in a manner that does not affect the lisencing of the implemented PoC. ClamAV is for instance licensed under the fairly restrictive GNU GPL v2 license, but since it is used as a [separate program](https://www.gnu.org/licenses/gpl-faq.html#MereAggregation), this PoC is not affected.
