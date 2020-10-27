@@ -1,50 +1,44 @@
 #!/bin/sh
-# Install dependencies and download DAC-clustering-PoC to $HOME
+# Install dependencies and download DAC-clustering-PoC to current working directory
 
 sudo apt-get update
 sudo apt-get install -y gcc cmake python3 python3-pip python-dev unzip clamav libclamunrar9
-sudo pip3 install filetype pillow pefile
+pip3 install --user filetype pillow pefile
 
-currentDir=$(pwd)
-mkdir $HOME/.dac-tools
-cd $HOME/.dac-tools
-
-echo "Installing DetectItEasy"
+# Install DetectItEasy to $HOME/.bin/die_lin64_portable/
+mkdir -p $HOME/.bin/
 wget https://github.com/horsicq/DIE-engine/releases/download/2.05/die_lin64_portable_2.05.tar.gz -O die_lin64_portable.tar.gz
 gzip -d die_lin64_portable.tar.gz
-tar -xf die_lin64_portable.tar
+tar -xf die_lin64_portable.tar -C $HOME/.bin/
 rm die_lin64_portable.tar
-sudo echo -e '#!/bin/sh' "\n$HOME/.dac-tools/die_lin64_portable/diec.sh " '"$@"' | sudo tee /usr/local/bin/diec
+# "diec" (DetectItEasy console) must be located in a $PATH directory.
+sudo echo -e '#!/bin/sh' "\n$HOME/.bin/die_lin64_portable/diec.sh " '"$@"' | sudo tee /usr/local/bin/diec
 sudo chmod +x /usr/local/bin/diec
 
-echo "Installing tlsh and the tlsh python class"
+# Install TLSH with the TLSH Python module to $HOME/.bin/tlsh-master/
 wget https://github.com/trendmicro/tlsh/archive/master.zip -O master.zip
-unzip master.zip
-cd tlsh-master
-./make.sh
-cd py_ext/
-python3 ./setup.py build
-sudo python3 ./setup.py install
+unzip master.zip -d $HOME/.bin/
+$HOME/.bin/tlsh-master/make.sh
+python3 $HOME/.bin/tlsh-master/py_ext/setup.py build
+python3 $HOME/.bin/tlsh-master/py_ext/setup.py install --user
 
-cd $HOME/.dac-tools
-echo "Installing pefile-extract-icon python class"
+# Install pefile-extract-icon
 git clone https://github.com/ntnu-rgb/pefile-extract-icon.git
-cd pefile-extract-icon
-sudo python3 setup.py install
+python3 ./pefile-extract-icon/setup.py install --user
 
-echo "Installing ClamAV"
+# Disable the ClamAV service, delete signature database and create an empty one
 sudo service clamav-freshclam stop
 sudo systemctl disable clamav-freshclam
 sudo rm /var/lib/clamav/*
 sudo echo -e "rule pass\n{\n\tcondition:\n\t\tfalse\n}" | sudo tee /var/lib/clamav/pass.yar
 
-cd $HOME
+# Clone this repo
 git clone https://github.com/57ur14/DAC-clustering-PoC.git
 cd DAC-clustering-PoC
+
+# Copy example config
 cp example-config.ini config.ini
-# Generate a random 32-character key
+
+# Generate a random 32-character key to use for the sockets
 key=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 32)
 echo "key = $key" >> config.ini
-echo "Please edit config.ini to suit your preferences"
-
-cd $currentDir
