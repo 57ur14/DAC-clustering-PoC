@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# File used for training and testing with K-fold validation. 
+# Left here as inspiration as it has not been generalized for other environments.
+
 for split in {1..5};
 do
     dataset="ijcnn"
