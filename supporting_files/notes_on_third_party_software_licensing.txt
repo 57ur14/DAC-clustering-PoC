@@ -7,6 +7,5 @@ Licenses of third party software:
 * pyhash: Apache Software License
 * hashlib: Python Software Foundation License
 * filetype: MIT
-* requests: Apache Software License (Apache 2.0)
 
 Running as separate processes and communicating via command-line arguments and pipes does seem to count as separate programs, which is why this software does not seem to be affected by the fairly restrictive GPLv2 license of ClamAV: https://www.gnu.org/licenses/gpl-faq.html#MereAggregation
