@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+run - a script used for launching the PoC.
+See README.md and help (./run -h) for details on usage.
+
+Part of D&C-Clustering-POC
+
+Copyright (c) 2020 Sturla Høgdahl Bae
+"""
 
 import argparse
 import configparser
