@@ -7,7 +7,7 @@ The PoC has been testder under Ubuntu 18.04. The following steps describe how to
 
 ```sh
 sudo apt-get install -y gcc cmake python3 python3-pip python-dev unzip clamav libclamunrar9
-pip3 install filetype pillow pefile --user
+pip3 install --user filetype pillow pefile
 
 # Install DetectItEasy to $HOME/.bin/die_lin64_portable/
 mkdir -p $HOME/.bin/
